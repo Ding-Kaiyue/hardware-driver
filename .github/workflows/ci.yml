@@ -30,13 +30,13 @@ jobs:
         cd build
         make test
 
-    - name: Create release package
+    - name: Build example
       run: |
-        ./create_release_package.sh
-        ls -la hardware_driver_release/
+        cd build
+        make simple_example
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v3
       with:
-        name: release-package
-        path: hardware_driver_release/ 
+        name: build-artifacts
+        path: build/ 
