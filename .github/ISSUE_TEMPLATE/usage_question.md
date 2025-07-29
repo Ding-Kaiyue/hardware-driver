@@ -2,8 +2,8 @@
 name: 使用问题
 about: 询问库的使用方法
 title: '[QUESTION] '
-labels: 'question'
-assignees: 'Ding-Kaiyue'
+labels: ['question']
+assignees: ['Ding-Kaiyue']
 
 ---
 

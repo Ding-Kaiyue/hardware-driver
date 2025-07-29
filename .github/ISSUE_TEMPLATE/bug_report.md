@@ -2,8 +2,8 @@
 name: Bug 报告
 about: 报告使用中的 Bug
 title: '[BUG] '
-labels: 'bug'
-assignees: 'Ding-Kaiyue'
+labels: ['bug']
+assignees: ['Ding-Kaiyue']
 
 ---
 
