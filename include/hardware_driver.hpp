@@ -46,7 +46,7 @@ public:
      * @brief 速度模式控制
      * @param interface CAN接口名称
      * @param motor_id 电机ID
-     * @param velocity 目标速度 (rad/s)
+     * @param velocity 目标速度 (degrees/s)
      */
     void control_motor_in_velocity_mode(const std::string& interface, uint32_t motor_id, float velocity);
 
@@ -54,7 +54,7 @@ public:
      * @brief 位置模式控制
      * @param interface CAN接口名称
      * @param motor_id 电机ID
-     * @param position 目标位置 (rad)
+     * @param position 目标位置 (degrees)
      */
     void control_motor_in_position_mode(const std::string& interface, uint32_t motor_id, float position);
 
@@ -70,8 +70,8 @@ public:
      * @brief MIT模式控制
      * @param interface CAN接口名称
      * @param motor_id 电机ID
-     * @param position 目标位置 (rad)
-     * @param velocity 目标速度 (rad/s)
+     * @param position 目标位置 (degrees)
+     * @param velocity 目标速度 (degrees/s)
      * @param effort 目标力矩 (Nm)
      */
     void control_motor_in_mit_mode(const std::string& interface, uint32_t motor_id, 

@@ -54,7 +54,7 @@ TEST(RobotHardwareTest, VelocityAndDisable) {
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
     // 发送速度命令让电机转动，代码内部已处理时序控制
-    std::cout << "发送can0 速度命令 (50.0 rad/s)" << std::endl;
+    std::cout << "发送can0 速度命令 (50.0 degrees/s)" << std::endl;
     hw.control_motor_in_velocity_mode("can0", 1, 50.0f);
     hw.control_motor_in_velocity_mode("can0", 2, 50.0f);
     hw.control_motor_in_velocity_mode("can0", 3, 50.0f);
@@ -63,7 +63,7 @@ TEST(RobotHardwareTest, VelocityAndDisable) {
     hw.control_motor_in_velocity_mode("can0", 6, 50.0f);
     hw.control_motor_in_velocity_mode("can0", 7, 50.0f);
     hw.control_motor_in_velocity_mode("can0", 8, 50.0f);
-    std::cout << "发送can1 速度命令 (50.0 rad/s)" << std::endl;
+    std::cout << "发送can1 速度命令 (50.0 degrees/s)" << std::endl;
     hw.control_motor_in_velocity_mode("can1", 1, 50.0f);
     hw.control_motor_in_velocity_mode("can1", 2, 50.0f);
     hw.control_motor_in_velocity_mode("can1", 3, 50.0f);

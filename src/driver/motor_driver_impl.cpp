@@ -73,7 +73,7 @@ void MotorDriverImpl::send_velocity_cmd(const std::string interface, const uint3
     packet.id = motor_id;
     
     if (motor_protocol::pack_velocity_command(packet.data, packet.len, velocity)) {
-        // std::cout << "准备发送速度命令: ID=" << packet.id << ", 速度=" << velocity << " rad/s" << std::endl;
+        // std::cout << "准备发送速度命令: ID=" << packet.id << ", 速度=" << velocity << " degrees/s" << std::endl;
         send_with_priority(packet, Command::Type::CONTROL);
     } 
     // else {

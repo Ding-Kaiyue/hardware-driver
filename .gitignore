@@ -7,6 +7,13 @@ hardware_driver_v*.tar.gz
 
 #Debian包构造目录
 debian/
+obj-*/
+
+# Debian构建产物
+*.deb
+*.dsc
+*.changes
+*.tar.gz
 
 # CMake生成的文件
 CMakeCache.txt

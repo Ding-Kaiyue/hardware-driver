@@ -18,11 +18,9 @@ hardware_driver/
 │   └── protocol/                  # 协议实现
 ├── examples/                      # 示例代码
 ├── tests/                         # 测试代码
-├── debian/                        # Debian包配置
 ├── cmake/                         # CMake配置
 ├── build.sh                       # 构建脚本
-├── create_release_package.sh      # 发布脚本
-├── build_debian_package.sh        # Debian包构建脚本
+├── CMakeList.txt                  
 └── README.md                      # 用户文档
 ```
 
@@ -99,8 +97,8 @@ HardwareDriver (API层)
 RobotHardware (控制层)
     ↓
 ┌─────────────────┬─────────────────┬─────────────────┐
-│   控制线程      │   反馈请求线程   │   反馈处理线程   │
-│ (发送控制命令)   │ (定期请求状态)   │ (处理状态反馈)   │
+│   控制线程       │   反馈请求线程    │   反馈处理线程    │
+│ (发送控制命令)    │ (定期请求状态)    │ (处理状态反馈)    │
 └─────────────────┴─────────────────┴─────────────────┘
     ↓
 MotorDriver (驱动层)
@@ -180,34 +178,22 @@ BusInterface (通信层)
 
 ## 发布流程
 
-### 1. 创建发布包
-```bash
-./create_release_package.sh
-```
+> **注意**：正式版本发布由项目维护者负责，开发者请勿直接发布。
 
-### 2. 构建Debian包
-```bash
-./build_debian_package.sh
-```
+### 发布检查清单
+- [ ] 所有测试通过
+- [ ] 文档更新
+- [ ] 版本号更新
+- [ ] 发布包创建
+- [ ] Debian包构建
+- [ ] GitHub发布
 
-### 3. 测试发布包
-```bash
-cd hardware_driver_release
-./build_example.sh
-sudo ./install.sh
-```
-
-### 4. 上传到GitHub
-```bash
-# 创建发布标签
-git tag v1.0.0
-git push origin v1.0.0
-
-# 上传发布包
-# 在GitHub Releases页面上传 hardware_driver_v1.0.0.tar.gz
-# 上传 libhardware-driver0_1.0.0_amd64.deb
-# 上传 libhardware-driver-dev_1.0.0_amd64.deb
-```
+### 开发者贡献流程
+1. Fork项目
+2. 创建功能分支
+3. 提交Pull Request
+4. 等待代码审查
+5. 维护者决定是否合并和发布
 
 ## 代码规范
 
@@ -261,10 +247,41 @@ ldd build/lib/libhardware_driver.so
 nm build/lib/libhardware_driver.so | grep HardwareDriver
 
 # 运行测试
-cd build && make test
+cd build
+./test_robot_hardware
+./test_motor_driver_impl
+./test_motor_protocol
+./test_canfd_bus_integration
+
+# 运行所有测试（如果有测试脚本）
+./build.sh里面有运行所有测试的脚本
 
 # 性能分析
 valgrind --tool=callgrind ./simple_example
+
+# 查看性能报告
+# 使用kcachegrind图形界面查看
+kcachegrind callgrind.out.*
+
+# 或者使用命令行工具
+callgrind_annotate callgrind.out.*
+
+# 内存泄漏检查
+# 检查内存泄漏
+valgrind --tool=memcheck --leak-check=full ./simple_example
+
+# 检查内存访问错误
+valgrind --tool=memcheck ./simple_example
+
+# 其他有用的选项
+# 详细的内存检查
+valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all ./simple_example
+
+# 检查未初始化的变量
+valgrind --tool=memcheck --track-origins=yes ./simple_example
+
+# 生成详细报告
+valgrind --tool=callgrind --callgrind-out-file=profile.out ./simple_example
 ```
 
 ## 版本管理
@@ -293,4 +310,12 @@ valgrind --tool=callgrind ./simple_example
 
 ## 许可证
 
-版权所有，源码不公开。 
+本项目采用开源许可证，具体许可证信息请查看项目根目录的 `LICENSE` 文件。
+
+### 开源贡献
+欢迎社区贡献代码！请遵循以下流程：
+1. Fork项目
+2. 创建功能分支
+3. 提交Pull Request
+4. 等待代码审查
+5. 维护者决定是否合并 

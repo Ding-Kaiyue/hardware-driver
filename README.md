@@ -153,13 +153,9 @@ auto all_status = driver.get_all_motor_status("can0");
 - **微信**: d18292819833
 - **商业合作**: 欢迎联系进行定制开发和技术支持
 
-## 更多信息
+## 📚 文档
 
-- 示例代码: [examples/](examples/)
-- 开发者文档: [DEVELOPER.md](DEVELOPER.md)
-- 贡献指南: [CONTRIBUTING.md](.github/CONTRIBUTING.md) - 了解如何贡献代码
-- 行为准则: [CODE_OF_CONDUCT.md](.github/CODE_OF_CONDUCT.md) - 社区行为规范
-- 项目管理: 使用 [GitHub Issues](https://github.com/Ding-Kaiyue/hardware-driver/issues) 和 [Pull Requests](https://github.com/Ding-Kaiyue/hardware-driver/pulls) 进行协作
+更多文档请查看 [docs/](docs/) 目录，包括API参考、开发者指南等。
 
 ## 许可证
 

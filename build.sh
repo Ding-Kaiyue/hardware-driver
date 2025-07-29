@@ -45,18 +45,15 @@ echo "=== 生成的文件 ==="
 ls -la demo_main
 ls -la lib/libhardware_driver.so
 
-# echo ""
-# echo "=== 运行测试 ==="
-# if [ -d tests ]; then
-#   echo "==== 运行单元测试 ===="
-#   # for test_file in tests/test_*; do
-#   #   if [ -f "$test_file" ] && [ -x "$test_file" ]; then
-#   #     echo "运行测试: $(basename "$test_file")"
-#   #     ./"$test_file"
-#   #     echo ""
-#   #   fi
-#   # done
-#   echo "运行测试: test_robot_hardware"
-#   ./tests/test_robot_hardware
-#   echo ""
-# fi
+echo ""
+echo "=== 运行测试 ==="
+if [ -d tests ]; then
+  echo "==== 运行单元测试 ===="
+  for test_file in tests/test_*; do
+    if [ -f "$test_file" ] && [ -x "$test_file" ]; then
+      echo "运行测试: $(basename "$test_file")"
+      ./"$test_file"
+      echo ""
+    fi
+  done
+fi

@@ -26,8 +26,8 @@ int main() {
         
         // 控制电机
         std::cout << "控制电机..." << std::endl;
-        driver.control_motor_in_velocity_mode("can0", 1, 10.0);  // 速度模式，10 rad/s
-        driver.control_motor_in_position_mode("can0", 2, 1.57);  // 位置模式，1.57 rad (90度)
+        driver.control_motor_in_velocity_mode("can0", 1, 10.0);  // 速度模式，10 degrees/s
+        driver.control_motor_in_position_mode("can0", 2, 90.0);  // 位置模式，90 degrees
         
         // 获取电机状态
         std::cout << "获取电机状态..." << std::endl;
