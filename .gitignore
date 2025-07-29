@@ -1,0 +1,27 @@
+# 构建目录
+build/
+
+# 发布包
+hardware_driver_release/
+hardware_driver_v*.tar.gz
+
+# 编译产物
+*.o
+*.so
+*.a
+*.exe
+
+# IDE文件
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 临时文件
+*~
+*.tmp
+*.log
+
+# 系统文件
+.DS_Store
+Thumbs.db

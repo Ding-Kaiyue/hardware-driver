@@ -1,0 +1,36 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	dh_auto_configure -- -DCMAKE_BUILD_TYPE=Release
+
+override_dh_auto_install:
+	dh_auto_install
+	# 安装头文件
+	mkdir -p debian/libhardware-driver-dev/usr/include/hardware_driver
+	cp include/hardware_driver.hpp debian/libhardware-driver-dev/usr/include/
+	cp -r include/hardware_driver/* debian/libhardware-driver-dev/usr/include/hardware_driver/
+	
+	# 安装库文件
+	mkdir -p debian/libhardware-driver0/usr/lib
+	cp build/lib/libhardware_driver.so* debian/libhardware-driver0/usr/lib/
+	
+	# 安装pkg-config文件
+	mkdir -p debian/libhardware-driver-dev/usr/lib/pkgconfig
+	cp hardware_driver.pc debian/libhardware-driver-dev/usr/lib/pkgconfig/
+	
+	# 安装文档
+	mkdir -p debian/libhardware-driver-dev/usr/share/doc/libhardware-driver-dev
+	cp README_USER.md debian/libhardware-driver-dev/usr/share/doc/libhardware-driver-dev/
+	
+	# 安装示例
+	mkdir -p debian/libhardware-driver-dev/usr/share/hardware-driver/examples
+	cp examples/simple_example.cpp debian/libhardware-driver-dev/usr/share/hardware-driver/examples/
+
+override_dh_auto_build:
+	dh_auto_build
+	# 编译库
+	mkdir -p build
+	cd build && cmake .. && make 
