@@ -2,8 +2,8 @@
 name: 功能请求
 about: 请求新功能
 title: '[FEATURE] '
-labels: 'enhancement'
-assignees: 'Ding-Kaiyue'
+labels: ['enhancement']
+assignees: ['Ding-Kaiyue']
 
 ---
 
