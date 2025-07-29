@@ -144,9 +144,9 @@ auto all_status = driver.get_all_motor_status("can0");
 如果您在使用过程中遇到问题，可以通过以下方式获取帮助：
 
 ### GitHub Issues
-- **使用问题**: [提交使用问题](https://github.com/Ding-Kaiyue/hardware-driver/issues/new?template=使用问题) - 提交使用中的问题，我们会提供指导
-- **Bug 报告**: [报告 Bug](https://github.com/Ding-Kaiyue/hardware-driver/issues/new?template=Bug+报告) - 报告发现的 Bug，我们会尽快修复
-- **功能建议**: [提出建议](https://github.com/Ding-Kaiyue/hardware-driver/issues/new?template=功能请求) - 提出新功能建议，我们会认真考虑
+- **使用问题**: [提交使用问题](https://github.com/Ding-Kaiyue/hardware-driver/issues/new?template=usage_question.md) - 提交使用中的问题，我们会提供指导
+- **Bug 报告**: [报告 Bug](https://github.com/Ding-Kaiyue/hardware-driver/issues/new?template=bug_report.md) - 报告发现的 Bug，我们会尽快修复
+- **功能建议**: [提出建议](https://github.com/Ding-Kaiyue/hardware-driver/issues/new?template=feature_request.md) - 提出新功能建议，我们会认真考虑
 
 ### 联系方式
 - **Email**: kaiyue.ding@raysense.com
