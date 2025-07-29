@@ -6,8 +6,22 @@
 
 ### 方法1: 源码安装（推荐）
 ```bash
+# 克隆仓库
+git clone https://github.com/Ding-Kaiyue/hardware-driver.git
+cd hardware-driver
+
+# 编译安装
+mkdir build && cd build
+cmake ..
+make -j$(nproc)
+sudo make install
+sudo ldconfig
+```
+
+### 方法2: 发布包安装
+```bash
 # 下载发布包
-wget https://github.com/your-repo/hardware_driver/releases/download/v1.0.0/hardware_driver_v1.0.0.tar.gz
+wget https://github.com/Ding-Kaiyue/hardware-driver/releases/download/v1.0.0/hardware_driver_v1.0.0.tar.gz
 
 # 解压并安装
 tar -xzf hardware_driver_v1.0.0.tar.gz
@@ -15,11 +29,24 @@ cd hardware_driver_release
 sudo ./install.sh
 ```
 
-### 方法2: Debian包安装
+### 方法3: APT安装
+```bash
+# 添加仓库密钥
+wget -qO - https://ding-kaiyue.github.io/hardware-driver/gpg.key | sudo apt-key add -
+
+# 添加仓库
+echo "deb [arch=amd64] https://ding-kaiyue.github.io/hardware-driver jammy main" | sudo tee /etc/apt/sources.list.d/hardware-driver.list
+
+# 更新并安装
+sudo apt update
+sudo apt install libhardware-driver0 libhardware-driver-dev
+```
+
+### 方法4: Debian包安装
 ```bash
 # 下载并安装
-wget https://github.com/your-repo/hardware_driver/releases/download/v1.0.0/libhardware-driver0_1.0.0_amd64.deb
-wget https://github.com/your-repo/hardware_driver/releases/download/v1.0.0/libhardware-driver-dev_1.0.0_amd64.deb
+wget https://github.com/Ding-Kaiyue/hardware-driver/releases/download/v1.0.0/libhardware-driver0_1.0.0_amd64.deb
+wget https://github.com/Ding-Kaiyue/hardware-driver/releases/download/v1.0.0/libhardware-driver-dev_1.0.0_amd64.deb
 sudo dpkg -i libhardware-driver0_1.0.0_amd64.deb
 sudo dpkg -i libhardware-driver-dev_1.0.0_amd64.deb
 sudo apt-get install -f
@@ -67,10 +94,10 @@ int main() {
 ## 编译
 
 ```bash
-# 使用g++
+# 使用g++编译您的程序
 g++ -std=c++17 -lhardware_driver -lpthread your_program.cpp -o your_program
 
-# 使用pkg-config
+# 使用pkg-config（如果已安装）
 g++ -std=c++17 $(pkg-config --cflags --libs hardware_driver) your_program.cpp -o your_program
 ```
 
@@ -116,7 +143,9 @@ auto all_status = driver.get_all_motor_status("can0");
 
 - 示例代码: [examples/](examples/)
 - 开发者文档: [DEVELOPER.md](DEVELOPER.md)
+- 贡献指南: [CONTRIBUTING.md](.github/CONTRIBUTING.md)
+- 行为准则: [CODE_OF_CONDUCT.md](.github/CODE_OF_CONDUCT.md)
 
 ## 许可证
 
-版权所有，源码不公开。 
+MIT License - 详见 [LICENSE](LICENSE) 文件 
