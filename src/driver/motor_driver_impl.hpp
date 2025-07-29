@@ -2,7 +2,7 @@
 #define __MOTOR_DRIVER_IMPL_HPP__
 
 #include "hardware_driver/driver/motor_driver_interface.hpp"
-#include "hardware_driver/protocol/motor_protocol.hpp"
+#include "protocol/motor_protocol.hpp"
 #include "hardware_driver/bus/bus_interface.hpp"
 #include <iostream>
 #include <memory>
