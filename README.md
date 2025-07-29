@@ -139,12 +139,27 @@ auto all_status = driver.get_all_motor_status("can0");
 2. **权限错误**: 使用sudo运行程序
 3. **库文件未找到**: 运行 `sudo ldconfig`
 
+## 获取帮助
+
+如果您在使用过程中遇到问题，可以通过以下方式获取帮助：
+
+### GitHub Issues
+- **使用问题**: [提交使用问题](https://github.com/Ding-Kaiyue/hardware-driver/issues/new?template=usage_question.md) - 提交使用中的问题，我们会提供指导
+- **Bug 报告**: [报告 Bug](https://github.com/Ding-Kaiyue/hardware-driver/issues/new?template=bug_report.md) - 报告发现的 Bug，我们会尽快修复
+- **功能建议**: [提出建议](https://github.com/Ding-Kaiyue/hardware-driver/issues/new?template=feature_request.md) - 提出新功能建议，我们会认真考虑
+
+### 联系方式
+- **Email**: kaiyue.ding@raysense.com
+- **微信**: d18292819833
+- **商业合作**: 欢迎联系进行定制开发和技术支持
+
 ## 更多信息
 
 - 示例代码: [examples/](examples/)
 - 开发者文档: [DEVELOPER.md](DEVELOPER.md)
-- 贡献指南: [CONTRIBUTING.md](.github/CONTRIBUTING.md)
-- 行为准则: [CODE_OF_CONDUCT.md](.github/CODE_OF_CONDUCT.md)
+- 贡献指南: [CONTRIBUTING.md](.github/CONTRIBUTING.md) - 了解如何贡献代码
+- 行为准则: [CODE_OF_CONDUCT.md](.github/CODE_OF_CONDUCT.md) - 社区行为规范
+- 项目管理: 使用 [GitHub Issues](https://github.com/Ding-Kaiyue/hardware-driver/issues) 和 [Pull Requests](https://github.com/Ding-Kaiyue/hardware-driver/pulls) 进行协作
 
 ## 许可证
 
