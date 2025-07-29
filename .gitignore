@@ -5,6 +5,15 @@ build/
 hardware_driver_release/
 hardware_driver_v*.tar.gz
 
+#Debian包构造目录
+debian/
+
+# CMake生成的文件
+CMakeCache.txt
+cmake_install.cmake
+CMakeFiles/
+*.cmake
+
 # 编译产物
 *.o
 *.so
