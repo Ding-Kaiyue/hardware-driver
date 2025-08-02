@@ -222,7 +222,7 @@ TEST(MotorProtocolTest, ParseCanfdMotorStatusFeedback) {
     GenericBusPacket pkt;
     pkt.protocol_type = bus::BusProtocolType::CAN_FD;
     pkt.interface = "can0";
-    pkt.id = 0x301; // 0x300 + motor_id
+    pkt.id = 0x101; // 0x100 + motor_id
     pkt.len = 24;
     // 构造数据 - 使用大端序
     pkt.data[1] = 1; // enable_flag

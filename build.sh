@@ -42,7 +42,7 @@ echo "库文件位置: build/lib/libhardware_driver.so"
 # 显示文件信息
 echo ""
 echo "=== 生成的文件 ==="
-ls -la demo_main
+ls -la simple_example
 ls -la lib/libhardware_driver.so
 
 echo ""

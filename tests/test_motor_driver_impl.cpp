@@ -137,6 +137,9 @@ TEST_F(MotorDriverImplTest, SendMITCommand) {
 TEST_F(MotorDriverImplTest, ParameterRead) {
     motor_driver_->motor_parameter_read("can0", 1, 0x1234);
     
+    // 等待队列处理线程处理命令
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    
     EXPECT_TRUE(test_bus_->was_send_called());
     const auto& packet = test_bus_->get_last_packet();
     EXPECT_EQ(packet.interface, "can0");
@@ -149,6 +152,9 @@ TEST_F(MotorDriverImplTest, ParameterRead) {
 
 TEST_F(MotorDriverImplTest, ParameterWriteInt) {
     motor_driver_->motor_parameter_write("can1", 2, 0x2345, -123456);
+    
+    // 等待队列处理线程处理命令
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
     
     EXPECT_TRUE(test_bus_->was_send_called());
     const auto& packet = test_bus_->get_last_packet();
@@ -163,6 +169,9 @@ TEST_F(MotorDriverImplTest, ParameterWriteInt) {
 
 TEST_F(MotorDriverImplTest, ParameterWriteFloat) {
     motor_driver_->motor_parameter_write("can0", 3, 0x3456, 12.34f);
+    
+    // 等待队列处理线程处理命令
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
     
     EXPECT_TRUE(test_bus_->was_send_called());
     const auto& packet = test_bus_->get_last_packet();
@@ -179,6 +188,9 @@ TEST_F(MotorDriverImplTest, ParameterWriteFloat) {
 TEST_F(MotorDriverImplTest, FunctionOperation) {
     motor_driver_->motor_function_operation("can1", 4, 0x11);
     
+    // 等待队列处理线程处理命令
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    
     EXPECT_TRUE(test_bus_->was_send_called());
     const auto& packet = test_bus_->get_last_packet();
     EXPECT_EQ(packet.interface, "can1");
@@ -191,6 +203,9 @@ TEST_F(MotorDriverImplTest, FunctionOperation) {
 TEST_F(MotorDriverImplTest, FeedbackRequest) {
     motor_driver_->motor_feedback_request("can0", 5);
     
+    // 等待队列处理线程处理命令
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    
     EXPECT_TRUE(test_bus_->was_send_called());
     const auto& packet = test_bus_->get_last_packet();
     EXPECT_EQ(packet.interface, "can0");
@@ -200,6 +215,9 @@ TEST_F(MotorDriverImplTest, FeedbackRequest) {
 
 TEST_F(MotorDriverImplTest, FeedbackRequestAll) {
     motor_driver_->motor_feedback_request_all("can1");
+    
+    // 等待队列处理线程处理命令
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
     
     EXPECT_TRUE(test_bus_->was_send_called());
     const auto& packet = test_bus_->get_last_packet();
@@ -223,7 +241,7 @@ TEST_F(MotorDriverImplTest, HandleMotorStatusFeedback) {
     GenericBusPacket packet;
     packet.protocol_type = BusProtocolType::CAN_FD;
     packet.interface = "can0";
-    packet.id = 0x301; // 0x300 + motor_id
+    packet.id = 0x101; // 0x100 + motor_id
     packet.len = 24;
     
     // 构造数据 - 使用大端序
@@ -304,7 +322,7 @@ TEST_F(MotorDriverImplTest, MultipleMotorStatus) {
         GenericBusPacket packet;
         packet.protocol_type = BusProtocolType::CAN_FD;
         packet.interface = "can0";
-        packet.id = 0x300 + i; // 0x300 + motor_id
+        packet.id = 0x100 + i; // 0x100 + motor_id
         packet.len = 24;
         
         // 使用正确的协议格式构造数据

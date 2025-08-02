@@ -35,7 +35,7 @@ hardware_driver/
 ### 构建步骤
 ```bash
 # 克隆项目
-git clone https://github.com/your-repo/hardware_driver.git
+git clone https://github.com/Ding-Kaiyue/hardware_driver.git
 cd hardware_driver
 
 # 构建
