@@ -6,11 +6,20 @@
 
 ## 快速开始
 
+### 基本控制示例
 ```cpp
 #include <hardware_driver.hpp>
 
 int main() {
-    hardware_driver::HardwareDriver driver;
+    // 配置CAN接口和电机
+    std::vector<std::string> interfaces = {"can0", "can1"};
+    std::map<std::string, std::vector<uint32_t>> motor_config = {
+        {"can0", {1, 2, 3, 4}},
+        {"can1", {1, 2, 3, 4, 5, 6, 7, 8}}
+    };
+    
+    // 创建硬件驱动
+    hardware_driver::HardwareDriver driver(interfaces, motor_config);
     
     // 使能电机
     driver.enable_motor("can0", 1, 4);
@@ -25,14 +34,50 @@ int main() {
 }
 ```
 
+### 设备维护示例
+```cpp
+#include <hardware_utility.hpp>
+
+int main() {
+    // 配置CAN接口和电机
+    std::vector<std::string> interfaces = {"can0", "can1"};
+    std::map<std::string, std::vector<uint32_t>> motor_config = {
+        {"can0", {1, 2, 3, 4}},
+        {"can1", {1, 2, 3, 4, 5, 6, 7, 8}}
+    };
+    
+    // 创建硬件工具类
+    hardware_driver::HardwareUtility utility(interfaces, motor_config);
+    
+    // 读取电机参数
+    utility.param_read("can0", 1, 0x1001);
+    
+    // 写入电机参数
+    utility.param_write("can0", 1, 0x1002, 1000);
+    
+    // 执行函数操作
+    utility.function_operation("can0", 1, 4);
+    
+    // 设置零位
+    utility.zero_position_set("can0", {1, 2, 3, 4});
+    
+    return 0;
+}
+```
+
 ## API参考
 
 ### HardwareDriver类
 
 #### 构造函数
 ```cpp
-HardwareDriver();
+HardwareDriver(const std::vector<std::string>& interfaces, 
+               const std::map<std::string, std::vector<uint32_t>>& motor_config);
 ```
+- **功能**: 创建硬件驱动实例
+- **参数**: 
+  - `interfaces`: CAN接口列表，如 {"can0", "can1"}
+  - `motor_config`: 电机配置，格式: {{"can0", {1,2,3,4}}, {"can1", {1,2,3,4,5,6,7,8}}}
 
 #### 电机控制
 
@@ -168,4 +213,110 @@ try {
 
 - 状态查询频率: 没有控制命令时，状态查询频率在 20Hz；有控制命令时，状态查询频率在 2.5kHz
 - 控制命令频率: 对于高优先级的控制命令，频率在 5kHz，并且会优先执行，有重试机制；对于低优先级的控制命令，频率在 5kHz，没有重试机制
-- 内存使用: < 10MB 
+- 内存使用: < 10MB
+
+## HardwareUtility类
+
+`HardwareUtility` 类提供设备维护和非实时操作功能，包括参数读写、函数操作、零位设置等。与 `HardwareDriver` 不同，它不参与高速控制环，主要用于调试、诊断和校准。
+
+### 构造函数
+```cpp
+HardwareUtility(const std::vector<std::string>& interfaces, 
+                const std::map<std::string, std::vector<uint32_t>>& motor_config);
+```
+- **功能**: 创建硬件工具类实例
+- **参数**: 
+  - `interfaces`: CAN接口列表，如 {"can0", "can1"}
+  - `motor_config`: 电机配置，格式: {{"can0", {1,2,3,4}}, {"can1", {1,2,3,4,5,6,7,8}}}
+
+### 参数操作
+
+#### param_read
+```cpp
+void param_read(const std::string& interface, uint32_t motor_id, uint16_t address);
+```
+- **功能**: 读取电机参数
+- **参数**: 
+  - `interface`: CAN接口名称
+  - `motor_id`: 电机ID
+  - `address`: 参数地址 (16位)
+
+#### param_write (int32_t)
+```cpp
+void param_write(const std::string& interface, uint32_t motor_id, uint16_t address, int32_t value);
+```
+- **功能**: 写入整数参数到电机
+- **参数**: 
+  - `interface`: CAN接口名称
+  - `motor_id`: 电机ID
+  - `address`: 参数地址 (16位)
+  - `value`: 参数值 (32位整数)
+
+#### param_write (float)
+```cpp
+void param_write(const std::string& interface, uint32_t motor_id, uint16_t address, float value);
+```
+- **功能**: 写入浮点参数到电机
+- **参数**: 
+  - `interface`: CAN接口名称
+  - `motor_id`: 电机ID
+  - `address`: 参数地址 (16位)
+  - `value`: 参数值 (32位浮点数)
+
+### 函数操作
+
+#### function_operation
+```cpp
+void function_operation(const std::string& interface, uint32_t motor_id, uint8_t opcode);
+```
+- **功能**: 执行电机函数操作
+- **参数**: 
+  - `interface`: CAN接口名称
+  - `motor_id`: 电机ID
+  - `opcode`: 操作码 (8位)
+
+### 零位设置
+
+#### zero_position_set
+```cpp
+void zero_position_set(const std::string& interface, std::vector<uint32_t> motor_ids);
+```
+- **功能**: 设置多个电机的零位
+- **参数**: 
+  - `interface`: CAN接口名称
+  - `motor_ids`: 电机ID列表
+
+### 使用场景
+
+#### 电机参数配置
+```cpp
+// 读取电机参数
+utility.param_read("can0", 1, 0x1001);  // 读取参数
+
+// 写入电机参数
+utility.param_write("can0", 1, 0x1002, 1000);  // 写入整数参数
+utility.param_write("can0", 1, 0x1003, 3.14f); // 写入浮点参数
+```
+
+#### 电机功能操作
+```cpp
+// 执行电机功能
+utility.function_operation("can0", 1, 4);  // 使能电机
+utility.function_operation("can0", 1, 2);  // 失能电机
+```
+
+#### 零位校准
+```cpp
+// 设置单个电机零位
+utility.zero_position_set("can0", {1});
+
+// 设置多个电机零位
+utility.zero_position_set("can0", {1, 2, 3, 4});
+```
+
+### 注意事项
+
+1. **非实时操作**: `HardwareUtility` 的操作不参与高速控制环，适合调试和配置
+2. **参数地址**: 参数地址需要参考电机手册，不同型号电机地址可能不同
+3. **操作码**: 函数操作码需要参考电机协议文档
+4. **零位设置**: 零位设置会依次对每个电机执行操作，中间有延时确保稳定性 

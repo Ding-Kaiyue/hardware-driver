@@ -43,7 +43,7 @@ public:
     
     // ========== 函数操作接口 ==========
     void motor_function_operation(const std::string& interface, const uint32_t motor_id, uint8_t operation);
-    void arm_zero_position_set(const std::string& interface, const uint8_t motor_num);
+    void arm_zero_position_set(const std::string& interface, const std::vector<uint32_t> motor_ids);
     
     // ========== 反馈请求接口 ==========
     void motor_feedback_request(const std::string& interface, const uint32_t motor_id);

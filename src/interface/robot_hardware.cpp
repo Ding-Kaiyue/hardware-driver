@@ -148,12 +148,12 @@ void RobotHardware::motor_function_operation(const std::string& interface, const
     motor_driver_->motor_function_operation(interface, motor_id, operation);
 }
 
-void RobotHardware::arm_zero_position_set(const std::string& interface, const uint8_t motor_num) {
-    for (uint8_t i = 0; i < motor_num; i++) {
+void RobotHardware::arm_zero_position_set(const std::string& interface, const std::vector<uint32_t> motor_ids) {
+    for (size_t i = 0; i < motor_ids.size(); i++) {
        // 直接发送，在send_packet里加锁保护
-       motor_driver_->motor_function_operation(interface, i + 1, 4);
+       motor_driver_->motor_function_operation(interface, motor_ids.at(i), 4);
        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-       motor_driver_->motor_function_operation(interface, i + 1, 2);
+       motor_driver_->motor_function_operation(interface, motor_ids.at(i), 2);
        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 }
@@ -345,3 +345,46 @@ HardwareDriver::get_all_motor_status(const std::string& interface) {
 }
 
 } // namespace hardware_driver
+
+// ========== HardwareUtility实现 ==========
+#include "hardware_utility.hpp"
+#include "driver/motor_driver_impl.hpp"
+#include "bus/canfd_bus_impl.hpp"
+
+namespace hardware_driver {
+
+HardwareUtility::HardwareUtility(const std::vector<std::string>& interfaces,
+                                 const std::map<std::string, std::vector<uint32_t>>& motor_config) {
+    // 创建CAN总线
+    auto bus = std::make_shared<bus::CanFdBus>(interfaces);
+    
+    // 创建电机驱动
+    auto motor_driver = std::make_shared<motor_driver::MotorDriverImpl>(bus);
+    
+    // 创建硬件接口
+    robot_hardware_ = std::make_unique<RobotHardware>(motor_driver, motor_config);  
+}
+
+HardwareUtility::~HardwareUtility() = default;
+
+void HardwareUtility::param_read(const std::string& interface, uint32_t motor_id, uint16_t address) {
+    robot_hardware_->motor_parameter_read(interface, motor_id, address);
+}
+
+void HardwareUtility::param_write(const std::string& interface, uint32_t motor_id, uint16_t address, int32_t value) {
+    robot_hardware_->motor_parameter_write(interface, motor_id, address, value);
+}
+
+void HardwareUtility::param_write(const std::string& interface, uint32_t motor_id, uint16_t address, float value) {
+    robot_hardware_->motor_parameter_write(interface, motor_id, address, value);
+}
+
+void HardwareUtility::function_operation(const std::string& interface, uint32_t motor_id, uint8_t opcode) {
+    robot_hardware_->motor_function_operation(interface, motor_id, opcode);
+}
+
+void HardwareUtility::zero_position_set(const std::string& interface, std::vector<uint32_t> motor_ids) {
+    robot_hardware_->arm_zero_position_set(interface, motor_ids);
+}
+
+}  // namespace hardware_driver
