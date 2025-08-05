@@ -18,7 +18,7 @@
 
 1. **Fork 项目**
    ```bash
-   git clone https://github.com/your-username/hardware-driver.git
+   git clone https://github.com/Ding-Kaiyue/hardware-driver.git
    cd hardware-driver
    ```
 
