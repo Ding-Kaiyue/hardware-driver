@@ -29,20 +29,7 @@ cd hardware_driver_release
 sudo ./install.sh
 ```
 
-### 方法3: APT安装
-```bash
-# 添加仓库密钥
-wget -qO - https://ding-kaiyue.github.io/hardware-driver/gpg.key | sudo apt-key add -
-
-# 添加仓库
-echo "deb [arch=amd64] https://ding-kaiyue.github.io/hardware-driver jammy main" | sudo tee /etc/apt/sources.list.d/hardware-driver.list
-
-# 更新并安装
-sudo apt update
-sudo apt install libhardware-driver0 libhardware-driver-dev
-```
-
-### 方法4: Debian包安装
+### 方法3: Debian包安装
 ```bash
 # 下载并安装
 wget https://github.com/Ding-Kaiyue/hardware-driver/releases/download/v1.0.0/libhardware-driver0_1.0.0_amd64.deb
