@@ -13,7 +13,7 @@
 
 #include <chrono>
 #include "hardware_driver/driver/motor_driver_interface.hpp"
-#include "protocol/motor_protocol.hpp"
+#include "hardware_driver/protocol/motor_protocol.hpp"
 
 class RobotHardware {
 public:

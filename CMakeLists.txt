@@ -62,6 +62,9 @@ target_link_libraries(simple_example
 # === 安装头文件和so ===
 install(DIRECTORY include/hardware_driver DESTINATION include)
 install(FILES include/hardware_driver.hpp DESTINATION include)
+install(DIRECTORY src/protocol DESTINATION include/hardware_driver)
+install(DIRECTORY src/driver DESTINATION include/hardware_driver)
+install(DIRECTORY src/bus DESTINATION include/hardware_driver)
 
 # 创建硬件驱动库的别名
 add_library(hardware_driver ALIAS arm_with_omnipicker_canfd)
