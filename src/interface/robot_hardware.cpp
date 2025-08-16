@@ -1,6 +1,7 @@
 #include "hardware_driver/interface/robot_hardware.hpp"
 #include <chrono>
 #include <thread>
+#include <cstring>
 
 # define REQUEST_ALL
 // # define REQUEST_BY_MOTOR_ID     // 只适用于单条总线
@@ -124,6 +125,81 @@ void RobotHardware::enable_motor(const std::string& interface, const uint32_t mo
     ensure_send_interval(interface, std::chrono::microseconds(200)); // 5kHz发送频率，平衡性能和可靠性
     // 直接发送，在send_packet里加锁保护
     motor_driver_->enable_motor(interface, motor_id, mode);
+}
+
+// ========== 实时批量控制接口 ==========
+bool RobotHardware::send_realtime_velocity_command(const std::string& interface, const std::vector<double>& joint_velocities) {
+    auto config_it = interface_motor_config_.find(interface);
+    if (config_it == interface_motor_config_.end()) {
+        return false;
+    }
+    
+    try {
+        const auto& motor_ids = config_it->second;
+        for (size_t i = 0; i < motor_ids.size(); ++i) {
+            float velocity = (i < joint_velocities.size()) ? static_cast<float>(joint_velocities[i]) : 0.0f;
+            control_motor_in_velocity_mode(interface, motor_ids[i], velocity);
+        }
+        return true;
+    } catch (const std::exception&) {
+        return false;
+    }
+}
+
+bool RobotHardware::send_realtime_position_command(const std::string& interface, const std::vector<double>& joint_positions) {
+    auto config_it = interface_motor_config_.find(interface);
+    if (config_it == interface_motor_config_.end()) {
+        return false;
+    }
+    
+    try {        
+        const auto& motor_ids = config_it->second;
+        for (size_t i = 0; i < motor_ids.size(); ++i) {
+            float position = (i < joint_positions.size()) ? static_cast<float>(joint_positions[i]) : 0.0f;
+            control_motor_in_position_mode(interface, motor_ids[i], position);
+        }
+        return true;
+    } catch (const std::exception&) {
+        return false;
+    }
+}
+
+bool RobotHardware::send_realtime_effort_command(const std::string& interface, const std::vector<double>& joint_efforts) {
+    auto config_it = interface_motor_config_.find(interface);
+    if (config_it == interface_motor_config_.end()) {
+        return false;
+    }
+    
+    try {
+        const auto& motor_ids = config_it->second;
+        for (size_t i = 0; i < motor_ids.size(); ++i) {
+            float effort = (i < joint_efforts.size()) ? static_cast<float>(joint_efforts[i]) : 0.0f;
+            control_motor_in_effort_mode(interface, motor_ids[i], effort);
+        }
+        return true;
+    } catch (const std::exception&) {
+        return false;
+    }
+}
+
+bool RobotHardware::send_realtime_mit_command(const std::string& interface, const std::vector<double>& joint_positions, const std::vector<double>& joint_velocities, const std::vector<double>& joint_efforts) {
+    auto config_it = interface_motor_config_.find(interface);
+    if (config_it == interface_motor_config_.end()) {
+        return false;
+    }
+    
+    try {
+        const auto& motor_ids = config_it->second;
+        for (size_t i = 0; i < motor_ids.size(); ++i) {
+            float position = (i < joint_positions.size()) ? static_cast<float>(joint_positions[i]) : 0.0f;
+            float velocity = (i < joint_velocities.size()) ? static_cast<float>(joint_velocities[i]) : 0.0f;
+            float effort = (i < joint_efforts.size()) ? static_cast<float>(joint_efforts[i]) : 0.0f;
+            control_motor_in_mit_mode(interface, motor_ids[i], position, velocity, effort);
+        }
+        return true;
+    } catch (const std::exception&) {
+        return false;
+    }
 }
 
 // ========== 参数读写接口 ==========
@@ -342,6 +418,22 @@ motor_driver::Motor_Status HardwareDriver::get_motor_status(const std::string& i
 std::map<std::pair<std::string, uint32_t>, motor_driver::Motor_Status> 
 HardwareDriver::get_all_motor_status(const std::string& interface) {
     return robot_hardware_->get_all_motor_status(interface);
+}
+
+bool HardwareDriver::send_realtime_velocity_command(const std::string& interface, const std::vector<double>& joint_velocities) {
+    return robot_hardware_->send_realtime_velocity_command(interface, joint_velocities);
+}
+
+bool HardwareDriver::send_realtime_position_command(const std::string& interface, const std::vector<double>& joint_positions) {
+    return robot_hardware_->send_realtime_position_command(interface, joint_positions);
+}
+
+bool HardwareDriver::send_realtime_effort_command(const std::string& interface, const std::vector<double>& joint_efforts) {
+    return robot_hardware_->send_realtime_effort_command(interface, joint_efforts);
+}
+
+bool HardwareDriver::send_realtime_mit_command(const std::string& interface, const std::vector<double>& joint_positions, const std::vector<double>& joint_velocities, const std::vector<double>& joint_efforts) {
+    return robot_hardware_->send_realtime_mit_command(interface, joint_positions, joint_velocities, joint_efforts);
 }
 
 } // namespace hardware_driver

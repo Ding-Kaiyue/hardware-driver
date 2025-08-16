@@ -108,6 +108,40 @@ public:
     std::map<std::pair<std::string, uint32_t>, motor_driver::Motor_Status> 
     get_all_motor_status(const std::string& interface);
 
+    /**
+     * @brief 实时批量速度控制
+     * @param interface CAN接口名称
+     * @param joint_velocities 关节速度数组 (degrees/s)
+     * @return 发送成功返回true
+     */
+    bool send_realtime_velocity_command(const std::string& interface, const std::vector<double>& joint_velocities);
+
+    /**
+     * @brief 实时批量位置控制
+     * @param interface CAN接口名称
+     * @param joint_positions 关节位置数组 (degrees)
+     * @return 发送成功返回true
+     */
+    bool send_realtime_position_command(const std::string& interface, const std::vector<double>& joint_positions);
+
+    /**
+     * @brief 实时批量力矩控制
+     * @param interface CAN接口名称
+     * @param joint_efforts 关节力矩数组 (Nm)
+     * @return 发送成功返回true
+     */
+    bool send_realtime_effort_command(const std::string& interface, const std::vector<double>& joint_efforts);
+
+    /**
+     * @brief 实时批量MIT模式控制
+     * @param interface CAN接口名称
+     * @param joint_positions 关节位置数组 (degrees)
+     * @param joint_velocities 关节速度数组 (degrees/s)
+     * @param joint_efforts 关节力矩数组 (Nm)
+     * @return 发送成功返回true
+     */
+    bool send_realtime_mit_command(const std::string& interface, const std::vector<double>& joint_positions, const std::vector<double>& joint_velocities, const std::vector<double>& joint_efforts);
+
 private:
     std::unique_ptr<RobotHardware> robot_hardware_;
 };

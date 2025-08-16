@@ -1,5 +1,5 @@
-#ifndef ROBOT_HARDWARE_HPP
-#define ROBOT_HARDWARE_HPP
+#ifndef __HARDWARE_DRIVER_ROBOT_HARDWARE_HPP__
+#define __HARDWARE_DRIVER_ROBOT_HARDWARE_HPP__
 
 #include <memory>
 #include <string>
@@ -13,7 +13,6 @@
 
 #include <chrono>
 #include "hardware_driver/driver/motor_driver_interface.hpp"
-#include "hardware_driver/protocol/motor_protocol.hpp"
 
 class RobotHardware {
 public:
@@ -35,6 +34,12 @@ public:
     void control_motor_in_effort_mode(const std::string& interface, const uint32_t motor_id, float effort);
     void disable_motor(const std::string& interface, const uint32_t motor_id);
     void enable_motor(const std::string& interface, const uint32_t motor_id, uint8_t mode);
+    
+    // ========== 实时批量控制接口 ==========
+    bool send_realtime_velocity_command(const std::string& interface, const std::vector<double>& joint_velocities);
+    bool send_realtime_position_command(const std::string& interface, const std::vector<double>& joint_positions);
+    bool send_realtime_effort_command(const std::string& interface, const std::vector<double>& joint_efforts);
+    bool send_realtime_mit_command(const std::string& interface, const std::vector<double>& joint_positions, const std::vector<double>& joint_velocities, const std::vector<double>& joint_efforts);
     
     // ========== 参数读写接口 ==========
     void motor_parameter_read(const std::string& interface, const uint32_t motor_id, uint16_t address);
@@ -75,4 +80,4 @@ private:
 };
 
 
-#endif // ROBOT_HARDWARE_HPP
+#endif // __HARDWARE_DRIVER_ROBOT_HARDWARE_HPP__
