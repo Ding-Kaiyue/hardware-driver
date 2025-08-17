@@ -404,7 +404,7 @@ void RobotHardware::process_feedback_thread() {
 }
 
 // ========== HardwareDriver实现 ==========
-#include "hardware_driver.hpp"
+#include "hardware_driver/hardware_driver.hpp"
 #include "driver/motor_driver_impl.hpp"
 #include "bus/canfd_bus_impl.hpp"
 
@@ -509,7 +509,7 @@ std::string HardwareDriver::get_interface_from_label(const std::string& label) c
 } // namespace hardware_driver
 
 // ========== HardwareUtility实现 ==========
-#include "hardware_utility.hpp"
+#include "hardware_driver/hardware_utility.hpp"
 #include "driver/motor_driver_impl.hpp"
 #include "bus/canfd_bus_impl.hpp"
 

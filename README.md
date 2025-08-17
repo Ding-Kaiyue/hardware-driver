@@ -154,20 +154,11 @@ make
 ./my_robot
 ```
 
-### 使用g++直接编译
+### 编译
 
 ```bash
 # 简化版本
-g++ -std=c++17 -I/usr/local/include -L/usr/local/lib -lhardware_driver -lpthread main.cpp -o my_robot
-
-# 注意：如果g++编译遇到链接问题，建议使用CMake方式编译
-```
-
-## 编译
-
-```bash
-# 使用g++编译您的程序
-g++ -std=c++17 -lhardware_driver -lpthread your_program.cpp -o your_program
+g++ -std=c++17 -I/usr/local/include your_program.cpp -L/usr/local/lib -lhardware_driver -lpthread -o your_program
 
 # 使用pkg-config（如果已安装）
 g++ -std=c++17 $(pkg-config --cflags --libs hardware_driver) your_program.cpp -o your_program
