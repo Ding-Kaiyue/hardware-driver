@@ -10,6 +10,8 @@
 #include <mutex>
 #include <vector>
 #include <map>
+#include <condition_variable>
+#include <functional>
 
 #include <chrono>
 #include "hardware_driver/driver/motor_driver_interface.hpp"
@@ -29,11 +31,15 @@ struct Trajectory {
     std::vector<TrajectoryPoint> points;
 };
 
+// 电机状态回调函数类型定义
+using MotorStatusCallback = std::function<void(const std::string& interface, uint32_t motor_id, const hardware_driver::motor_driver::Motor_Status& status)>;
+
 class RobotHardware {
 public:
     // 使用map配置每个接口对应的电机ID列表
     RobotHardware(std::shared_ptr<hardware_driver::motor_driver::MotorDriverInterface> motor_driver,
-                  const std::map<std::string, std::vector<uint32_t>>& interface_motor_config);
+                  const std::map<std::string, std::vector<uint32_t>>& interface_motor_config,
+                  MotorStatusCallback callback = nullptr);
     ~RobotHardware();
 
     // ========== 电机状态获取接口 ==========
@@ -95,6 +101,14 @@ private:
     std::mutex status_mutex_;
     // std::map<std::pair<std::string, uint32_t>, hardware_driver::motor_driver::Motor_Status> status_map_;
     std::unordered_map<std::string_view, std::unordered_map<uint32_t, hardware_driver::motor_driver::Motor_Status>> status_map_;
+    
+    // 事件驱动相关
+    std::mutex feedback_mutex_;
+    std::condition_variable feedback_cv_;
+    std::atomic<bool> has_new_feedback_{false};
+    
+    // 状态回调函数
+    MotorStatusCallback status_callback_;
     
 };
 

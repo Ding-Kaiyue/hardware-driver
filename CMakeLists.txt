@@ -72,6 +72,13 @@ target_link_libraries(test_simplified_version
   Threads::Threads
 )
 
+# 添加回调功能测试
+add_executable(test_callback test_callback.cpp)
+target_link_libraries(test_callback
+  arm_with_omnipicker_canfd
+  Threads::Threads
+)
+
 # === 安装头文件和so ===
 install(DIRECTORY include/hardware_driver DESTINATION include)
 

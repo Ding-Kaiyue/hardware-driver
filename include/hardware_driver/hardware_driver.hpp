@@ -26,7 +26,7 @@ namespace hardware_driver {
 class HardwareDriver {
 public:
     /**
-     * @brief 构造函数（完整版本）
+     * @brief 构造函数（标签映射）
      * @param interfaces CAN接口列表，如 {"can0", "can1"}
      * @param motor_config 电机配置，格式: {{"can0", {1,2,3,4}}, {"can1", {1,2,3,4,5,6,7,8}}}
      * @param label_to_interface_map label到接口的映射，格式: {{"arm_left", "can0"}, {"arm_right", "can1"}}
@@ -36,13 +36,34 @@ public:
                    const std::map<std::string, std::string>& label_to_interface_map);
     
     /**
-     * @brief 构造函数（简化版本）
+     * @brief 构造函数（最简版本）
      * @param interfaces CAN接口列表，如 {"can0", "can1"}
      * @param motor_config 电机配置，格式: {{"can0", {1,2,3,4}}, {"can1", {1,2,3,4,5,6,7,8}}}
      */
     HardwareDriver(const std::vector<std::string>& interfaces,
                    const std::map<std::string, std::vector<uint32_t>>& motor_config);
     
+    /**
+     * @brief 构造函数（带回调版本）
+     * @param interfaces CAN接口列表，如 {"can0", "can1"}
+     * @param motor_config 电机配置，格式: {{"can0", {1,2,3,4}}, {"can1", {1,2,3,4,5,6,7,8}}}
+     * @param callback 电机状态回调函数
+     */
+    HardwareDriver(const std::vector<std::string>& interfaces,
+                   const std::map<std::string, std::vector<uint32_t>>& motor_config,
+                   MotorStatusCallback callback);
+    
+    /**
+     * @brief 构造函数（带回调和标签映射版本）
+     * @param interfaces CAN接口列表，如 {"can0", "can1"}
+     * @param motor_config 电机配置，格式: {{"can0", {1,2,3,4}}, {"can1", {1,2,3,4,5,6,7,8}}}
+     * @param label_to_interface_map 标签到接口的映射，格式: {{"arm_left", "can0"}, {"arm_right", "can1"}}
+     * @param callback 电机状态回调函数
+     */
+    HardwareDriver(const std::vector<std::string>& interfaces,
+                   const std::map<std::string, std::vector<uint32_t>>& motor_config,
+                   const std::map<std::string, std::string>& label_to_interface_map,
+                   MotorStatusCallback callback);
     /**
      * @brief 析构函数
      */

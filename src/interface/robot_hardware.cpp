@@ -8,10 +8,12 @@
 
 RobotHardware::RobotHardware(
     std::shared_ptr<hardware_driver::motor_driver::MotorDriverInterface> motor_driver,
-    const std::map<std::string, std::vector<uint32_t>>& interface_motor_config)
+    const std::map<std::string, std::vector<uint32_t>>& interface_motor_config,
+    MotorStatusCallback callback)
     : motor_driver_(std::move(motor_driver)),
       interface_motor_config_(interface_motor_config),
-      running_(true)
+      running_(true),
+      status_callback_(callback)
 {
     // 启动两个线程
     feedback_request_thread_ = std::thread(&RobotHardware::request_feedback_thread, this);
@@ -20,6 +22,14 @@ RobotHardware::RobotHardware(
 
 RobotHardware::~RobotHardware() {
     running_ = false;
+    
+    // 通知等待的线程退出
+    {
+        std::lock_guard<std::mutex> lock(feedback_mutex_);
+        has_new_feedback_.store(true);
+    }
+    feedback_cv_.notify_all();
+    
     if (feedback_request_thread_.joinable()) feedback_request_thread_.join();
     if (feedback_process_thread_.joinable()) feedback_process_thread_.join();
 }
@@ -242,22 +252,30 @@ bool RobotHardware::execute_trajectory(const std::string& interface, const Traje
 
 // ========== 参数读写接口 ==========
 void RobotHardware::motor_parameter_read(const std::string& interface, const uint32_t motor_id, uint16_t address) {
+    update_control_time();
+    ensure_send_interval(interface, std::chrono::microseconds(1000)); // 1kHz发送频率，平衡性能和可靠性
     // 直接发送，在send_packet里加锁保护
     motor_driver_->motor_parameter_read(interface, motor_id, address);
 }
 
 void RobotHardware::motor_parameter_write(const std::string& interface, const uint32_t motor_id, uint16_t address, int32_t value) {
+    update_control_time();
+    ensure_send_interval(interface, std::chrono::microseconds(1000)); // 1kHz发送频率，平衡性能和可靠性
     // 直接发送，在send_packet里加锁保护
     motor_driver_->motor_parameter_write(interface, motor_id, address, value);
 }
 
 void RobotHardware::motor_parameter_write(const std::string& interface, const uint32_t motor_id, uint16_t address, float value) {
+    update_control_time();
+    ensure_send_interval(interface, std::chrono::microseconds(1000)); // 1kHz发送频率，平衡性能和可靠性
     // 直接发送，在send_packet里加锁保护
     motor_driver_->motor_parameter_write(interface, motor_id, address, value);
 }
 
 // ========== 函数操作接口 ==========
 void RobotHardware::motor_function_operation(const std::string& interface, const uint32_t motor_id, uint8_t operation) {
+    update_control_time();
+    ensure_send_interval(interface, std::chrono::microseconds(1000)); // 1kHz发送频率，平衡性能和可靠性
     // 直接发送，在send_packet里加锁保护
     motor_driver_->motor_function_operation(interface, motor_id, operation);
 }
@@ -351,6 +369,13 @@ void RobotHardware::request_feedback_thread() {
                 // 发送请求
                 motor_driver_->motor_feedback_request(timer.interface, timer.motor_id);
                 
+                // 通知process线程有新的反馈请求
+                {
+                    std::lock_guard<std::mutex> lock(feedback_mutex_);
+                    has_new_feedback_.store(true);
+                }
+                feedback_cv_.notify_one();
+                
                 // 更新下次请求时间
                 timer.next_time = now + std::chrono::microseconds(period_us);
             }
@@ -372,6 +397,13 @@ void RobotHardware::request_feedback_thread() {
                         // 发送请求所有电机的反馈
                         motor_driver_->motor_feedback_request_all(interface);
                         
+                        // 通知process线程有新的反馈请求
+                        {
+                            std::lock_guard<std::mutex> lock(feedback_mutex_);
+                            has_new_feedback_.store(true);
+                        }
+                        feedback_cv_.notify_one();
+                        
                         // 更新下次请求时间
                         timer.next_time = now + std::chrono::microseconds(period_us);
                     }
@@ -386,20 +418,39 @@ void RobotHardware::request_feedback_thread() {
 }
 
 void RobotHardware::process_feedback_thread() {
-    auto next_time = std::chrono::high_resolution_clock::now();
-
     while (running_) {
-        // 遍历每个接口及其对应的电机ID列表
-        for (const auto& [interface, motor_ids] : interface_motor_config_) {
-            for (const auto& motor_id : motor_ids) {
-                // 直接获取状态，send_packet里已经加锁保护
-                auto status = motor_driver_->get_motor_status(interface, motor_id);
-                std::lock_guard<std::mutex> status_lock(status_mutex_);
-                status_map_[interface][motor_id] = status;
+        // 等待反馈请求通知或超时
+        std::unique_lock<std::mutex> lock(feedback_mutex_);
+        feedback_cv_.wait_for(lock, std::chrono::milliseconds(100), [this] { 
+            return !running_ || has_new_feedback_.load(); 
+        });
+        
+        if (!running_) break;
+        
+        // 如果有新的反馈请求或者超时，则处理反馈数据
+        if (has_new_feedback_.load() || true) { // 超时也处理，防止遗漏
+            // 遍历每个接口及其对应的电机ID列表
+            for (const auto& [interface, motor_ids] : interface_motor_config_) {
+                for (const auto& motor_id : motor_ids) {
+                    // 直接获取状态，send_packet里已经加锁保护
+                    auto status = motor_driver_->get_motor_status(interface, motor_id);
+                    
+                    // 更新本地缓存
+                    {
+                        std::lock_guard<std::mutex> status_lock(status_mutex_);
+                        status_map_[interface][motor_id] = status;
+                    }
+                    
+                    // 调用回调函数，将状态推送给控制节点
+                    if (status_callback_) {
+                        status_callback_(interface, motor_id, status);
+                    }
+                }
             }
+            
+            // 重置标志
+            has_new_feedback_.store(false);
         }
-        next_time += std::chrono::microseconds(200); // 200us = 0.2ms = 5khz
-        std::this_thread::sleep_until(next_time);
     }
 }
 
@@ -436,6 +487,37 @@ HardwareDriver::HardwareDriver(const std::vector<std::string>& interfaces,
     // 创建硬件接口
     robot_hardware_ = std::make_unique<RobotHardware>(motor_driver, motor_config);
 }
+
+// 带回调的构造函数
+HardwareDriver::HardwareDriver(const std::vector<std::string>& interfaces,
+                               const std::map<std::string, std::vector<uint32_t>>& motor_config,
+                               MotorStatusCallback callback)
+    : label_to_interface_map_({}) {
+    // 创建CAN总线
+    auto bus = std::make_shared<bus::CanFdBus>(interfaces);
+    
+    // 创建电机驱动
+    auto motor_driver = std::make_shared<motor_driver::MotorDriverImpl>(bus);
+    
+    // 创建硬件接口，传递回调函数
+    robot_hardware_ = std::make_unique<RobotHardware>(motor_driver, motor_config, callback);
+}
+
+HardwareDriver::HardwareDriver(const std::vector<std::string>& interfaces,
+                               const std::map<std::string, std::vector<uint32_t>>& motor_config,
+                               const std::map<std::string, std::string>& label_to_interface_map,
+                               MotorStatusCallback callback)
+    : label_to_interface_map_(label_to_interface_map) {
+    // 创建CAN总线
+    auto bus = std::make_shared<bus::CanFdBus>(interfaces);
+    
+    // 创建电机驱动
+    auto motor_driver = std::make_shared<motor_driver::MotorDriverImpl>(bus);
+    
+    // 创建硬件接口
+    robot_hardware_ = std::make_unique<RobotHardware>(motor_driver, motor_config, callback);
+}
+
 
 HardwareDriver::~HardwareDriver() = default;
 
