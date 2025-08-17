@@ -3,6 +3,9 @@ project(hardware_driver)
 
 set(CMAKE_CXX_STANDARD 17)
 
+# 添加构建测试的选项，默认为 OFF
+option(BUILD_TESTS "Build unit tests" OFF)
+
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
@@ -12,7 +15,10 @@ include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-find_package(GTest)
+# 只有在启用测试时才查找 GTest
+if(BUILD_TESTS)
+  find_package(GTest)
+endif()
 find_package(Threads REQUIRED)
 
 # === canfd 组合 ===
@@ -111,9 +117,9 @@ install(EXPORT hardware_driverTargets
 )
 
 # === gtest集成 ===
-# 只有在找到 GTest 时才构建测试
-if(GTest_FOUND)
-  message(STATUS "GTest found, building tests")
+# 只有在启用测试选项且找到 GTest 时才构建测试
+if(BUILD_TESTS AND GTest_FOUND)
+  message(STATUS "BUILD_TESTS is ON and GTest found, building tests")
   
   # 创建tests目录
   file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
@@ -157,5 +163,9 @@ if(GTest_FOUND)
     endforeach()
   endif()
 else()
-  message(STATUS "GTest not found, skipping tests")
+  if(NOT BUILD_TESTS)
+    message(STATUS "BUILD_TESTS is OFF, skipping tests (use -DBUILD_TESTS=ON to enable)")
+  elseif(NOT GTest_FOUND)
+    message(STATUS "GTest not found, skipping tests")
+  endif()
 endif()
