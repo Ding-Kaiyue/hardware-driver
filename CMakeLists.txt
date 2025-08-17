@@ -65,6 +65,13 @@ target_link_libraries(simple_example
   Threads::Threads
 )
 
+# 添加简化版本测试
+add_executable(test_simplified_version test_simplified.cpp)
+target_link_libraries(test_simplified_version
+  arm_with_omnipicker_canfd
+  Threads::Threads
+)
+
 # === 安装头文件和so ===
 install(DIRECTORY include/hardware_driver DESTINATION include)
 install(FILES include/hardware_driver.hpp DESTINATION include)

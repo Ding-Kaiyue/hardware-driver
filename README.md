@@ -41,6 +41,25 @@ sudo apt-get install -f
 
 ## 快速开始
 
+### 使用CMake (推荐)
+
+创建 `CMakeLists.txt`:
+```cmake
+cmake_minimum_required(VERSION 3.8)
+project(my_robot_project)
+
+set(CMAKE_CXX_STANDARD 17)
+
+# 查找已安装的hardware_driver库
+find_package(hardware_driver REQUIRED)
+
+add_executable(my_robot main.cpp)
+target_link_libraries(my_robot hardware_driver::arm_with_omnipicker_canfd)
+```
+
+#### 简化版本（只驱动电机）
+
+创建 `main.cpp`:
 ```cpp
 #include "hardware_driver.hpp"
 #include <iostream>
@@ -53,7 +72,7 @@ int main() {
     };
     
     try {
-        // 创建驱动
+        // 创建驱动（简化版本，无需标签映射）
         hardware_driver::HardwareDriver driver(interfaces, motor_config);
         
         // 使能电机
@@ -76,6 +95,72 @@ int main() {
     
     return 0;
 }
+```
+
+#### 完整版本（支持左右臂标签）
+
+创建 `main.cpp`:
+```cpp
+#include "hardware_driver.hpp"
+#include <iostream>
+
+int main() {
+    // 配置硬件
+    std::vector<std::string> interfaces = {"can0", "can1"};
+    std::map<std::string, std::vector<uint32_t>> motor_config = {
+        {"can0", {1, 2, 3, 4}},
+        {"can1", {1, 2, 3, 4}}
+    };
+    std::map<std::string, std::string> label_to_interface_map = {
+        {"arm_left", "can0"},
+        {"arm_right", "can1"}
+    };
+    
+    try {
+        // 创建驱动（完整版本，支持标签映射）
+        hardware_driver::HardwareDriver driver(interfaces, motor_config, label_to_interface_map);
+        
+        // 使能电机
+        driver.enable_motor("can0", 1, 4);
+        
+        // 控制电机
+        driver.control_motor_in_velocity_mode("can0", 1, 5.0);
+        
+        // 获取状态
+        auto status = driver.get_motor_status("can0", 1);
+        std::cout << "位置: " << status.position << std::endl;
+        
+        // 使用轨迹控制（需要标签映射）
+        Trajectory trajectory;
+        driver.execute_trajectory("arm_left", trajectory);
+        
+        // 失能电机
+        driver.disable_motor("can0", 1);
+        
+    } catch (const std::exception& e) {
+        std::cerr << "错误: " << e.what() << std::endl;
+        return 1;
+    }
+    
+    return 0;
+}
+```
+
+编译和运行:
+```bash
+mkdir build && cd build
+cmake ..
+make
+./my_robot
+```
+
+### 使用g++直接编译
+
+```bash
+# 简化版本
+g++ -std=c++17 -I/usr/local/include -L/usr/local/lib -lhardware_driver -lpthread main.cpp -o my_robot
+
+# 注意：如果g++编译遇到链接问题，建议使用CMake方式编译
 ```
 
 ## 编译

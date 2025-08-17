@@ -424,6 +424,19 @@ HardwareDriver::HardwareDriver(const std::vector<std::string>& interfaces,
     robot_hardware_ = std::make_unique<RobotHardware>(motor_driver, motor_config);
 }
 
+HardwareDriver::HardwareDriver(const std::vector<std::string>& interfaces,
+                               const std::map<std::string, std::vector<uint32_t>>& motor_config)
+    : label_to_interface_map_({}) {
+    // 创建CAN总线
+    auto bus = std::make_shared<bus::CanFdBus>(interfaces);
+    
+    // 创建电机驱动
+    auto motor_driver = std::make_shared<motor_driver::MotorDriverImpl>(bus);
+    
+    // 创建硬件接口
+    robot_hardware_ = std::make_unique<RobotHardware>(motor_driver, motor_config);
+}
+
 HardwareDriver::~HardwareDriver() = default;
 
 void HardwareDriver::control_motor_in_velocity_mode(const std::string& interface, uint32_t motor_id, float velocity) {

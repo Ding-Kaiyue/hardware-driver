@@ -26,14 +26,22 @@ namespace hardware_driver {
 class HardwareDriver {
 public:
     /**
-     * @brief 构造函数
+     * @brief 构造函数（完整版本）
      * @param interfaces CAN接口列表，如 {"can0", "can1"}
      * @param motor_config 电机配置，格式: {{"can0", {1,2,3,4}}, {"can1", {1,2,3,4,5,6,7,8}}}
      * @param label_to_interface_map label到接口的映射，格式: {{"arm_left", "can0"}, {"arm_right", "can1"}}
      */
     HardwareDriver(const std::vector<std::string>& interfaces,
                    const std::map<std::string, std::vector<uint32_t>>& motor_config,
-                   const std::map<std::string, std::string>& label_to_interface_map = {});
+                   const std::map<std::string, std::string>& label_to_interface_map);
+    
+    /**
+     * @brief 构造函数（简化版本）
+     * @param interfaces CAN接口列表，如 {"can0", "can1"}
+     * @param motor_config 电机配置，格式: {{"can0", {1,2,3,4}}, {"can1", {1,2,3,4,5,6,7,8}}}
+     */
+    HardwareDriver(const std::vector<std::string>& interfaces,
+                   const std::map<std::string, std::vector<uint32_t>>& motor_config);
     
     /**
      * @brief 析构函数
