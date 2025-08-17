@@ -135,14 +135,22 @@ if(GTest_FOUND)
       )
       
       # 链接库
-      target_link_libraries(${TEST_NAME}
+      set(TEST_LIBS
         arm_with_omnipicker_canfd
         GTest::gtest
-        GTest::gmock
         GTest::gtest_main
-        GTest::gmock_main
         Threads::Threads
       )
+      
+      # 如果 GMock 可用，则添加它
+      if(TARGET GTest::gmock)
+        list(APPEND TEST_LIBS GTest::gmock)
+      endif()
+      if(TARGET GTest::gmock_main)
+        list(APPEND TEST_LIBS GTest::gmock_main)
+      endif()
+      
+      target_link_libraries(${TEST_NAME} ${TEST_LIBS})
       
       # 添加到CTest
       add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
