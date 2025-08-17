@@ -14,6 +14,21 @@
 #include <chrono>
 #include "hardware_driver/driver/motor_driver_interface.hpp"
 
+// ========== 轨迹数据结构定义 ==========
+// 简化的轨迹点结构（不依赖ROS2消息）
+struct TrajectoryPoint {
+    double time_from_start;
+    std::vector<double> positions;
+    std::vector<double> velocities;
+    std::vector<double> accelerations;
+};
+
+// 简化的轨迹结构（不依赖ROS2消息）
+struct Trajectory {
+    std::vector<std::string> joint_names;
+    std::vector<TrajectoryPoint> points;
+};
+
 class RobotHardware {
 public:
     // 使用map配置每个接口对应的电机ID列表
@@ -54,6 +69,9 @@ public:
     void motor_feedback_request(const std::string& interface, const uint32_t motor_id);
     void motor_feedback_request_all(const std::string& interface);
     
+    // ========== 轨迹执行接口 ==========
+    bool execute_trajectory(const std::string& interface, const Trajectory& trajectory);
+    
 private:
     std::atomic<bool> high_freq_mode_{false};
     std::chrono::steady_clock::time_point last_control_time_;
@@ -77,6 +95,7 @@ private:
     std::mutex status_mutex_;
     // std::map<std::pair<std::string, uint32_t>, hardware_driver::motor_driver::Motor_Status> status_map_;
     std::unordered_map<std::string_view, std::unordered_map<uint32_t, hardware_driver::motor_driver::Motor_Status>> status_map_;
+    
 };
 
 

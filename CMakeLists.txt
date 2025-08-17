@@ -12,7 +12,7 @@ include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-find_package(GTest REQUIRED)
+find_package(GTest)
 find_package(Threads REQUIRED)
 
 # === canfd 组合 ===
@@ -111,36 +111,43 @@ install(EXPORT hardware_driverTargets
 )
 
 # === gtest集成 ===
-# 创建tests目录
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
+# 只有在找到 GTest 时才构建测试
+if(GTest_FOUND)
+  message(STATUS "GTest found, building tests")
+  
+  # 创建tests目录
+  file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
-# 查找所有测试文件
-file(GLOB TEST_SOURCES tests/*.cpp)
-if(TEST_SOURCES)
-  # 为每个测试文件创建单独的可执行文件
-  foreach(TEST_FILE ${TEST_SOURCES})
-    # 获取文件名（不含扩展名）
-    get_filename_component(TEST_NAME ${TEST_FILE} NAME_WE)
-    
-    # 创建测试可执行文件
-    add_executable(${TEST_NAME} ${TEST_FILE})
-    
-    # 设置输出目录到build/tests
-    set_target_properties(${TEST_NAME} PROPERTIES
-      RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests
-    )
-    
-    # 链接库
-    target_link_libraries(${TEST_NAME}
-      arm_with_omnipicker_canfd
-      GTest::gtest
-      GTest::gmock
-      GTest::gtest_main
-      GTest::gmock_main
-      Threads::Threads
-    )
-    
-    # 添加到CTest
-    add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
-  endforeach()
+  # 查找所有测试文件
+  file(GLOB TEST_SOURCES tests/*.cpp)
+  if(TEST_SOURCES)
+    # 为每个测试文件创建单独的可执行文件
+    foreach(TEST_FILE ${TEST_SOURCES})
+      # 获取文件名（不含扩展名）
+      get_filename_component(TEST_NAME ${TEST_FILE} NAME_WE)
+      
+      # 创建测试可执行文件
+      add_executable(${TEST_NAME} ${TEST_FILE})
+      
+      # 设置输出目录到build/tests
+      set_target_properties(${TEST_NAME} PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests
+      )
+      
+      # 链接库
+      target_link_libraries(${TEST_NAME}
+        arm_with_omnipicker_canfd
+        GTest::gtest
+        GTest::gmock
+        GTest::gtest_main
+        GTest::gmock_main
+        Threads::Threads
+      )
+      
+      # 添加到CTest
+      add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
+    endforeach()
+  endif()
+else()
+  message(STATUS "GTest not found, skipping tests")
 endif()

@@ -202,6 +202,44 @@ bool RobotHardware::send_realtime_mit_command(const std::string& interface, cons
     }
 }
 
+// ========== 轨迹执行接口 ==========
+bool RobotHardware::execute_trajectory(const std::string& interface, const Trajectory& trajectory) {
+    auto config_it = interface_motor_config_.find(interface);
+    if (config_it == interface_motor_config_.end()) {
+        return false;
+    }
+    
+    if (trajectory.points.empty()) {
+        return false;
+    }
+    
+    try {
+        const auto& motor_ids = config_it->second;
+        auto start_time = std::chrono::steady_clock::now();
+        
+        for (const auto& point : trajectory.points) {
+            // 计算目标时间
+            auto target_time = start_time + std::chrono::duration<double>(point.time_from_start);
+            
+            // 等待到正确时间
+            std::this_thread::sleep_until(target_time);
+            
+            // 发送控制命令到每个电机
+            for (size_t i = 0; i < motor_ids.size() && i < point.positions.size(); ++i) {
+                float position = static_cast<float>(point.positions[i]);
+                float velocity = (i < point.velocities.size()) ? static_cast<float>(point.velocities[i]) : 0.0f;
+                float acceleration = (i < point.accelerations.size()) ? static_cast<float>(point.accelerations[i]) : 0.0f;
+                
+                // 使用MIT模式控制，复用现有的频率控制和优先级机制
+                control_motor_in_mit_mode(interface, motor_ids[i], position, velocity, acceleration);
+            }
+        }
+        return true;
+    } catch (const std::exception&) {
+        return false;
+    }
+}
+
 // ========== 参数读写接口 ==========
 void RobotHardware::motor_parameter_read(const std::string& interface, const uint32_t motor_id, uint16_t address) {
     // 直接发送，在send_packet里加锁保护
@@ -373,7 +411,9 @@ void RobotHardware::process_feedback_thread() {
 namespace hardware_driver {
 
 HardwareDriver::HardwareDriver(const std::vector<std::string>& interfaces,
-                               const std::map<std::string, std::vector<uint32_t>>& motor_config) {
+                               const std::map<std::string, std::vector<uint32_t>>& motor_config,
+                               const std::map<std::string, std::string>& label_to_interface_map)
+    : label_to_interface_map_(label_to_interface_map) {
     // 创建CAN总线
     auto bus = std::make_shared<bus::CanFdBus>(interfaces);
     
@@ -434,6 +474,23 @@ bool HardwareDriver::send_realtime_effort_command(const std::string& interface, 
 
 bool HardwareDriver::send_realtime_mit_command(const std::string& interface, const std::vector<double>& joint_positions, const std::vector<double>& joint_velocities, const std::vector<double>& joint_efforts) {
     return robot_hardware_->send_realtime_mit_command(interface, joint_positions, joint_velocities, joint_efforts);
+}
+
+bool HardwareDriver::execute_trajectory(const std::string& label, const Trajectory& trajectory) {
+    std::string interface = get_interface_from_label(label);
+    if (interface.empty()) {
+        return false;
+    }
+    return robot_hardware_->execute_trajectory(interface, trajectory);
+}
+
+std::string HardwareDriver::get_interface_from_label(const std::string& label) const {
+    auto it = label_to_interface_map_.find(label);
+    if (it != label_to_interface_map_.end()) {
+        return it->second;
+    }
+    // 如果没有找到映射，假设label就是interface名称
+    return label;
 }
 
 } // namespace hardware_driver

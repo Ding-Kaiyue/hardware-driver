@@ -29,9 +29,11 @@ public:
      * @brief 构造函数
      * @param interfaces CAN接口列表，如 {"can0", "can1"}
      * @param motor_config 电机配置，格式: {{"can0", {1,2,3,4}}, {"can1", {1,2,3,4,5,6,7,8}}}
+     * @param label_to_interface_map label到接口的映射，格式: {{"arm_left", "can0"}, {"arm_right", "can1"}}
      */
     HardwareDriver(const std::vector<std::string>& interfaces,
-                   const std::map<std::string, std::vector<uint32_t>>& motor_config);
+                   const std::map<std::string, std::vector<uint32_t>>& motor_config,
+                   const std::map<std::string, std::string>& label_to_interface_map = {});
     
     /**
      * @brief 析构函数
@@ -142,8 +144,20 @@ public:
      */
     bool send_realtime_mit_command(const std::string& interface, const std::vector<double>& joint_positions, const std::vector<double>& joint_velocities, const std::vector<double>& joint_efforts);
 
+    /**
+     * @brief 执行轨迹
+     * @param label 机械臂标签，如 "arm_left"
+     * @param trajectory 要执行的轨迹
+     * @return 执行成功返回true
+     */
+    bool execute_trajectory(const std::string& label, const Trajectory& trajectory);
+
 private:
     std::unique_ptr<RobotHardware> robot_hardware_;
+    std::map<std::string, std::string> label_to_interface_map_;
+    
+    // 根据label获取interface
+    std::string get_interface_from_label(const std::string& label) const;
 };
 
 } // namespace hardware_driver
