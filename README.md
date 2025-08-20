@@ -386,9 +386,8 @@ make test
 ip link show can0
 
 # 配置CAN接口
-sudo ip link set can0 type can bitrate 1000000
-sudo ip link set can0 up
-```
+sudo ip link set can0 txqueuelen 1000
+sudo ip link set can0 up type can bitrate 1000000 sample-point 0.8 dbitrate 5000000 dsample-point 0.75 fd on loopback off restart-ms 100```
 
 **2. 权限不足**
 ```bash
