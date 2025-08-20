@@ -1,27 +1,39 @@
-# 硬件驱动库 - 开发者文档
+# 硬件驱动库 v2.0.0 - 开发者文档
 
 ## 项目结构
 
 ```
-hardware_driver/
-├── include/                        # 公共头文件
-│   ├── hardware_driver.hpp         # 主头文件
-│   └── hardware_driver/            # 内部头文件
-│       ├── bus/                    # 总线接口
-│       ├── driver/                 # 驱动接口
-│       ├── interface/              # 硬件接口
-│       └── protocol/               # 协议文件
+hardware_driver_lib/
+├── include/hardware_driver/        # 公共头文件
+│   ├── bus/                       # 总线接口
+│   │   ├── bus_interface.hpp      # 总线基类
+│   │   └── canfd_bus_impl.hpp     # CAN-FD总线实现
+│   ├── driver/                    # 驱动接口
+│   │   ├── motor_driver_interface.hpp  # 电机驱动接口
+│   │   └── gripper_driver_interface.hpp # 夹爪驱动接口
+│   ├── event/                     # 事件系统
+│   │   ├── event_bus.hpp          # 事件总线
+│   │   └── motor_events.hpp       # 电机事件定义
+│   └── interface/                 # 硬件接口
+│       └── robot_hardware.hpp     # 机器人硬件接口
 ├── src/                           # 源码实现
 │   ├── bus/                       # 总线实现
 │   ├── driver/                    # 驱动实现
+│   ├── event/                     # 事件系统实现
 │   ├── interface/                 # 硬件接口实现
 │   └── protocol/                  # 协议实现
-├── examples/                      # 示例代码
-├── tests/                         # 测试代码
-├── cmake/                         # CMake配置
+├── examples/                      # v2.0示例代码
+│   ├── example_motor_observer.cpp # 观察者模式示例
+│   ├── example_motor_event_bus.cpp# 事件总线示例
+│   ├── example_motor_callback_fb.cpp # 回调模式示例
+│   └── example_motor_zero_position.cpp # 零位设置示例
+├── tests/                         # 单元测试
+├── docs/                          # 完整文档
+├── debian/                        # Debian包配置
 ├── build.sh                       # 构建脚本
-├── CMakeList.txt                  
-└── README.md                      # 用户文档
+├── create_debian_package.sh       # Debian包构建脚本
+├── create_release_package.sh      # 源码包构建脚本
+└── CMakeLists.txt                 # CMake配置
 ```
 
 ## 构建系统
@@ -38,106 +50,135 @@ hardware_driver/
 git clone https://github.com/Ding-Kaiyue/hardware_driver.git
 cd hardware_driver
 
-# 构建
+# 构建库和示例
 ./build.sh
 
 # 或手动构建
 mkdir build && cd build
-cmake ..
-make
+cmake .. -DBUILD_TESTS=ON
+make -j$(nproc)
 ```
 
 ### 测试
 ```bash
 # 运行所有测试
 cd build
-make test
+ctest
 
-# 运行特定测试
-./test_robot_hardware
-./test_motor_driver_impl
+# 或运行特定测试
+./tests/test_robot_hardware
+./tests/test_motor_driver_impl
+./tests/test_canfd_bus_integration
+./tests/test_event_bus_api
+./tests/test_hybrid_architecture
+
+# 运行示例程序
+./examples/example_motor_observer
+./examples/example_motor_event_bus
+./examples/example_motor_callback_fb
 ```
 
-## 架构设计
+## v2.0.0 架构设计
+
+### 事件驱动架构概述
+
+v2.0.0采用全新的事件驱动架构，提供三种数据获取模式：
+- **观察者模式**：实时性能最佳，适用于控制回路
+- **回调模式**：兼容v1.x的用法，提供简单接口
+- **事件总线**：解耦架构，适用于监控、日志、诊断等
 
 ### 核心组件
 
-1. **HardwareDriver** - 用户主要接口类
-   - 提供简单的API
-   - 内部管理RobotHardware实例
-   - 线程安全的接口
+1. **RobotHardware** - 主要用户接口类
+   - 统一的电机控制API
+   - 支持多种数据获取模式
+   - 线程安全的接口设计
 
-2. **RobotHardware** - 硬件抽象层
-   - 管理电机驱动和总线
-   - 处理多线程状态反馈
-   - 提供完整的控制接口
+2. **MotorDriverImpl** - 电机驱动实现层
+   - 实现观察者模式接口
+   - 管理电机状态和控制
+   - 支持事件总线集成
+   - 多线程架构（控制线程、反馈线程、数据处理线程）
 
-3. **MotorDriver** - 电机驱动层
-   - 实现电机控制协议
-   - 处理CAN通信
-   - 管理电机状态
+3. **CanFdBus** - CAN-FD总线实现
+   - 高性能CAN通信
+   - 自动队列管理
+   - CPU亲和性优化
+   - 错误恢复机制
 
-4. **BusInterface** - 总线通信层
-   - 抽象CAN总线接口
-   - 支持CANFD和EtherCAT
-   - 处理底层通信
+4. **EventBus** - 事件总线系统
+   - 类型安全的事件发布/订阅
+   - 弱引用管理，防止内存泄漏
+   - 线程安全的并发处理
+   - 主题过滤和统计信息
 
-5. **Protocol** - 通信协议层
-   - 定义电机通信协议
-   - 处理数据包格式
-   - 实现协议解析
+5. **MotorStatusObserver** - 观察者接口
+   - 实时状态更新通知
+   - 支持单个和批量状态更新
+   - 函数和参数操作结果回调
 
-### 线程模型
+### v2.0.0 线程模型
 
 ```
-主线程 (用户调用)
+用户线程 (控制调用)
     ↓
-HardwareDriver (API层)
+RobotHardware (主接口)
     ↓
-RobotHardware (控制层)
+MotorDriverImpl (驱动层)
     ↓
 ┌─────────────────┬─────────────────┬─────────────────┐
-│   控制线程       │   反馈请求线程    │   反馈处理线程    │
-│ (发送控制命令)    │ (定期请求状态)    │ (处理状态反馈)    │
+│   控制线程       │   反馈线程       │   数据处理线程    │
+│ (异步控制命令)    │ (高频状态请求)    │ (事件分发处理)    │
+│ CPU亲和性绑定    │ CPU亲和性绑定    │ 观察者通知       │
+│                │ 高低频智能切换    │ 事件总线发布     │
 └─────────────────┴─────────────────┴─────────────────┘
     ↓
-MotorDriver (驱动层)
+CanFdBus (CAN-FD通信层)
     ↓
-BusInterface (通信层)
+┌─────────────────┬─────────────────┐
+│   发送线程       │   接收线程       │
+│ (命令队列处理)    │ (状态数据接收)    │
+│                │ 队列管理         │
+└─────────────────┴─────────────────┘
     ↓
-硬件 (CAN接口)
+硬件 (CAN接口 - can0, can1, ...)
+
+数据流向：
+观察者模式: 硬件 → 接收线程 → 数据处理线程 → 直接回调 (最快)
+事件总线: 硬件 → 接收线程 → 数据处理线程 → 事件总线 → 订阅者
 ```
 
-## 开发指南
+## v2.0.0 开发指南
 
-### 添加新功能
+### 添加新的电机控制功能
 
-1. **在头文件中声明**
+1. **在RobotHardware中添加接口**
    ```cpp
    // include/hardware_driver/interface/robot_hardware.hpp
    class RobotHardware {
    public:
-       void new_function(const std::string& interface, uint32_t motor_id, ...);
+       void new_control_function(const std::string& interface, uint32_t motor_id, double param);
    };
    ```
 
-2. **在实现文件中实现**
+2. **在实现文件中实现功能**
    ```cpp
    // src/interface/robot_hardware.cpp
-   void RobotHardware::new_function(const std::string& interface, uint32_t motor_id, ...) {
-       // 实现逻辑
+   void RobotHardware::new_control_function(const std::string& interface, uint32_t motor_id, double param) {
+       if (motor_driver_) {
+           motor_driver_->new_control_function(interface, motor_id, param);
+       }
    }
    ```
 
-3. **在用户接口中暴露**
+3. **在MotorDriverImpl中添加底层实现**
    ```cpp
-   // include/hardware_driver.hpp
-   class HardwareDriver {
-   public:
-       void new_function(const std::string& interface, uint32_t motor_id, ...) {
-           robot_hardware_->new_function(interface, motor_id, ...);
-       }
-   };
+   // src/driver/motor_driver_impl.cpp
+   void MotorDriverImpl::new_control_function(const std::string& interface, uint32_t motor_id, double param) {
+       // 创建控制命令并异步发送
+       auto command = create_new_command(motor_id, param);
+       send_command_async(interface, command);
+   }
    ```
 
 ### 添加新协议
@@ -162,19 +203,93 @@ BusInterface (通信层)
 
 1. **继承BusInterface**
    ```cpp
-   // src/bus/new_bus_impl.hpp
+   // include/hardware_driver/bus/new_bus_impl.hpp
    class NewBusImpl : public BusInterface {
    public:
        NewBusImpl(const std::vector<std::string>& interfaces);
-       // 实现虚函数
+       
+       // 实现基类虚函数
+       bool send_frame(const std::string& interface, const CanFrame& frame) override;
+       void set_batch_callback(BatchStatusCallback callback) override;
+       void start() override;
+       void stop() override;
    };
    ```
 
-2. **在工厂中注册**
+2. **在RobotHardware中使用**
    ```cpp
-   // src/interface/robot_hardware.cpp
-   auto bus = std::make_shared<bus::NewBusImpl>(interfaces);
+   // 使用新总线类型
+   auto bus = std::make_shared<hardware_driver::bus::NewBusImpl>(interfaces);
+   auto motor_driver = std::make_shared<hardware_driver::motor_driver::MotorDriverImpl>(bus);
    ```
+
+### 添加新事件类型
+
+1. **创建事件类**
+```cpp
+// include/hardware_driver/event/custom_events.hpp
+class CustomEvent : public Event {
+private:
+    std::string data_;
+    
+public:
+    CustomEvent(const std::string& data) : data_(data) {}
+    
+    std::string get_type_name() const override {
+        return "CustomEvent";
+    }
+    
+    std::string get_topic() const override {
+        return "custom.device.data";
+    }
+    
+    const std::string& get_data() const { return data_; }
+};
+```
+
+2. **在事件总线中使用**
+```cpp
+// 发布自定义事件
+event_bus->emit<CustomEvent>("custom data");
+
+// 订阅自定义事件
+event_bus->subscribe<CustomEvent>([](const auto& event) {
+    std::cout << "收到自定义事件: " << event->get_data() << std::endl;
+});
+```
+
+### 添加新的观察者
+
+1. **实现观察者接口**
+```cpp
+class CustomObserver : public MotorStatusObserver {
+public:
+    void on_motor_status_update(const std::string& interface, uint32_t motor_id, 
+                               const Motor_Status& status) override {
+        // 处理电机状态更新
+        process_motor_data(interface, motor_id, status);
+    }
+    
+    void on_motor_batch_status_update(const std::string& interface, 
+                                     const std::map<uint32_t, Motor_Status>& status_all) override {
+        // 处理批量状态更新
+        for (const auto& [motor_id, status] : status_all) {
+            process_motor_data(interface, motor_id, status);
+        }
+    }
+    
+private:
+    void process_motor_data(const std::string& interface, uint32_t motor_id, const Motor_Status& status) {
+        // 自定义处理逻辑
+    }
+};
+```
+
+2. **注册观察者**
+```cpp
+auto observer = std::make_shared<CustomObserver>();
+motor_driver->add_observer(observer);
+```
 
 ## 发布流程
 

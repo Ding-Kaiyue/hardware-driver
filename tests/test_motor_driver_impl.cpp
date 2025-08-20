@@ -4,6 +4,9 @@
 #include <memory>
 #include <thread>
 #include <chrono>
+#include <atomic>
+#include <mutex>
+#include <map>
 
 using namespace hardware_driver;
 using namespace hardware_driver::motor_driver;
@@ -56,25 +59,69 @@ private:
     std::function<void(const GenericBusPacket&)> callback_;
 };
 
+// 测试用的电机状态观察者
+class TestMotorStatusObserver : public MotorStatusObserver {
+public:
+    std::map<std::string, std::map<uint32_t, Motor_Status>> status_map;
+    std::mutex status_mutex;
+    std::atomic<int> status_update_count{0};
+    
+    void on_motor_status_update(const std::string& interface, 
+                               uint32_t motor_id, 
+                               const Motor_Status& status) override {
+        std::lock_guard<std::mutex> lock(status_mutex);
+        status_map[interface][motor_id] = status;
+        status_update_count++;
+    }
+    
+    Motor_Status get_motor_status(const std::string& interface, uint32_t motor_id) {
+        std::lock_guard<std::mutex> lock(status_mutex);
+        if (status_map.find(interface) != status_map.end() &&
+            status_map[interface].find(motor_id) != status_map[interface].end()) {
+            return status_map[interface][motor_id];
+        }
+        // 返回默认状态如果没有找到
+        return Motor_Status{};
+    }
+    
+    void clear_status() {
+        std::lock_guard<std::mutex> lock(status_mutex);
+        status_map.clear();
+        status_update_count = 0;
+    }
+};
+
 class MotorDriverImplTest : public ::testing::Test {
 protected:
     void SetUp() override {
         test_bus_ = std::make_shared<TestBusInterface>();
-        motor_driver_ = std::make_unique<MotorDriverImpl>(test_bus_);
+        motor_driver_ = std::make_shared<MotorDriverImpl>(test_bus_);
+        
+        // 创建并注册状态观察者
+        status_observer_ = std::make_shared<TestMotorStatusObserver>();
+        motor_driver_->add_observer(status_observer_);
     }
 
     void TearDown() override {
+        if (motor_driver_ && status_observer_) {
+            motor_driver_->remove_observer(status_observer_);
+        }
         motor_driver_.reset();
         test_bus_.reset();
+        status_observer_.reset();
     }
 
     std::shared_ptr<TestBusInterface> test_bus_;
-    std::unique_ptr<MotorDriverImpl> motor_driver_;
+    std::shared_ptr<MotorDriverImpl> motor_driver_;
+    std::shared_ptr<TestMotorStatusObserver> status_observer_;
 };
 
 // 测试基本命令发送
 TEST_F(MotorDriverImplTest, SendDisableCommand) {
     motor_driver_->disable_motor("can0", 1);
+    
+    // 等待异步处理完成
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
     
     EXPECT_TRUE(test_bus_->was_send_called());
     const auto& packet = test_bus_->get_last_packet();
@@ -88,6 +135,9 @@ TEST_F(MotorDriverImplTest, SendDisableCommand) {
 TEST_F(MotorDriverImplTest, SendPositionCommand) {
     motor_driver_->send_position_cmd("can0", 2, 1.5f);
     
+    // 等待异步处理完成
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    
     EXPECT_TRUE(test_bus_->was_send_called());
     const auto& packet = test_bus_->get_last_packet();
     EXPECT_EQ(packet.interface, "can0");
@@ -99,6 +149,9 @@ TEST_F(MotorDriverImplTest, SendPositionCommand) {
 
 TEST_F(MotorDriverImplTest, SendVelocityCommand) {
     motor_driver_->send_velocity_cmd("can1", 3, 2.5f);
+    
+    // 等待异步处理完成
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
     
     EXPECT_TRUE(test_bus_->was_send_called());
     const auto& packet = test_bus_->get_last_packet();
@@ -112,6 +165,9 @@ TEST_F(MotorDriverImplTest, SendVelocityCommand) {
 TEST_F(MotorDriverImplTest, SendEffortCommand) {
     motor_driver_->send_effort_cmd("can0", 4, 3.5f);
     
+    // 等待异步处理完成
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    
     EXPECT_TRUE(test_bus_->was_send_called());
     const auto& packet = test_bus_->get_last_packet();
     EXPECT_EQ(packet.interface, "can0");
@@ -123,6 +179,9 @@ TEST_F(MotorDriverImplTest, SendEffortCommand) {
 
 TEST_F(MotorDriverImplTest, SendMITCommand) {
     motor_driver_->send_mit_cmd("can1", 5, 1.0f, 2.0f, 3.0f);
+    
+    // 等待异步处理完成
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
     
     EXPECT_TRUE(test_bus_->was_send_called());
     const auto& packet = test_bus_->get_last_packet();
@@ -199,40 +258,21 @@ TEST_F(MotorDriverImplTest, FunctionOperation) {
     EXPECT_EQ(packet.data[1], 0x11); // op_code
 }
 
-// 测试反馈请求
-TEST_F(MotorDriverImplTest, FeedbackRequest) {
-    motor_driver_->motor_feedback_request("can0", 5);
-    
-    // 等待队列处理线程处理命令
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    
-    EXPECT_TRUE(test_bus_->was_send_called());
-    const auto& packet = test_bus_->get_last_packet();
-    EXPECT_EQ(packet.interface, "can0");
-    EXPECT_EQ(packet.id, 0x205u); // motor_id + 0x200
-    EXPECT_EQ(packet.data[0], 0x00);
-}
-
-TEST_F(MotorDriverImplTest, FeedbackRequestAll) {
-    motor_driver_->motor_feedback_request_all("can1");
-    
-    // 等待队列处理线程处理命令
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    
-    EXPECT_TRUE(test_bus_->was_send_called());
-    const auto& packet = test_bus_->get_last_packet();
-    EXPECT_EQ(packet.interface, "can1");
-    EXPECT_EQ(packet.id, 0u); // broadcast ID
-}
-
 // 测试状态获取
 TEST_F(MotorDriverImplTest, GetMotorStatusEmpty) {
-    auto status = motor_driver_->get_motor_status("can0", 1);
+    // 清空状态观察者
+    status_observer_->clear_status();
+    
+    // 没有收到任何状态更新时，应该返回默认状态
+    auto status = status_observer_->get_motor_status("can0", 1);
     EXPECT_EQ(status.enable_flag, 0u);
     EXPECT_EQ(status.motor_mode, 0u);
     EXPECT_FLOAT_EQ(status.position, 0.0f);
     EXPECT_FLOAT_EQ(status.velocity, 0.0f);
     EXPECT_FLOAT_EQ(status.effort, 0.0f);
+    
+    // 验证没有收到状态更新
+    EXPECT_EQ(status_observer_->status_update_count.load(), 0);
 }
 
 // 测试反馈处理
@@ -281,7 +321,7 @@ TEST_F(MotorDriverImplTest, HandleMotorStatusFeedback) {
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
     
     // 检查状态是否被正确更新
-    auto status = motor_driver_->get_motor_status("can0", 1);
+    auto status = status_observer_->get_motor_status("can0", 1);
     EXPECT_EQ(status.enable_flag, 1u);
     EXPECT_EQ(status.motor_mode, 3u);
     EXPECT_NEAR(status.position, 1.23f, 1e-5f);
@@ -291,6 +331,9 @@ TEST_F(MotorDriverImplTest, HandleMotorStatusFeedback) {
     EXPECT_EQ(status.voltage, 330u);
     EXPECT_EQ(status.temperature, 55u);
     EXPECT_EQ(status.limit_flag, 1u);
+    
+    // 验证观察者收到了状态更新
+    EXPECT_GT(status_observer_->status_update_count.load(), 0);
 }
 
 // 测试错误处理
@@ -308,11 +351,14 @@ TEST_F(MotorDriverImplTest, HandleInvalidPacket) {
     // 等待一小段时间让回调执行
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
     
-    // 检查状态是否保持默认值
-    auto status = motor_driver_->get_motor_status("can0", 1);
+    // 检查状态是否保持默认值（无效包不应该触发状态更新）
+    auto status = status_observer_->get_motor_status("can0", 1);
     EXPECT_EQ(status.enable_flag, 0u);
     EXPECT_EQ(status.motor_mode, 0u);
     EXPECT_FLOAT_EQ(status.position, 0.0f);
+    
+    // 验证没有收到状态更新（因为是无效包）
+    EXPECT_EQ(status_observer_->status_update_count.load(), 0);
 }
 
 // 测试多个电机状态管理
@@ -368,12 +414,13 @@ TEST_F(MotorDriverImplTest, MultipleMotorStatus) {
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
     
     // 检查两个电机的状态
-    auto status1 = motor_driver_->get_motor_status("can0", 1);
-    auto status2 = motor_driver_->get_motor_status("can0", 2);
+    auto status1 = status_observer_->get_motor_status("can0", 1);
+    auto status2 = status_observer_->get_motor_status("can0", 2);
     
     // 添加调试信息
     std::cout << "Debug: status1.enable_flag = " << static_cast<int>(status1.enable_flag) << std::endl;
     std::cout << "Debug: status2.enable_flag = " << static_cast<int>(status2.enable_flag) << std::endl;
+    std::cout << "Debug: status update count = " << status_observer_->status_update_count.load() << std::endl;
     
     EXPECT_EQ(status1.enable_flag, 1u);
     EXPECT_EQ(status1.motor_mode, 3u);
@@ -394,6 +441,9 @@ TEST_F(MotorDriverImplTest, MultipleMotorStatus) {
     EXPECT_EQ(status2.voltage, 320u);
     EXPECT_EQ(status2.temperature, 60u);
     EXPECT_EQ(status2.limit_flag, 1u);
+    
+    // 验证观察者收到了两个电机的状态更新
+    EXPECT_EQ(status_observer_->status_update_count.load(), 2);
 }
 
 // 测试接口名称获取

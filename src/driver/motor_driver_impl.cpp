@@ -19,21 +19,93 @@ MotorDriverImpl::MotorDriverImpl(std::shared_ptr<bus::BusInterface> bus)
             canfd_bus->set_fd_mode(interface, use_canfd_);
         }
     }
-    
-    // 注册异步接收回调
+    // 初始化控制时间
+    last_control_time_ = std::chrono::steady_clock::now();
+
+    // 注册异步接收回调 - 只负责入队，不阻塞接收线程
     bus_->async_receive([this](const bus::GenericBusPacket& packet) {
-        this->handle_bus_packet(packet);
+        {
+            std::lock_guard<std::mutex> lock(receive_mutex_);
+            
+            // 检查接收队列大小，实现背压控制
+            if (receive_queue_.size() >= MAX_QUEUE_SIZE) {
+                // 队列满时，丢弃最旧的数据，保留最新的数据
+                receive_queue_.pop();
+                std::cerr << "Warning: Receive queue overflow, dropping oldest packet" << std::endl;
+            }
+            
+            receive_queue_.push(packet);
+        }
+        receive_cv_.notify_one();
     });
-    
-    // 启动队列处理线程
-    queue_processing_thread_ = std::thread(&MotorDriverImpl::queue_processing_worker, this);
+
+    // 启动三线程架构
+    data_processing_thread_ = std::thread(&MotorDriverImpl::data_processing_worker, this);
+    feedback_request_thread_ = std::thread(&MotorDriverImpl::feedback_request_worker, this);
+    control_thread_ = std::thread(&MotorDriverImpl::control_worker, this);
 }
 
 MotorDriverImpl::~MotorDriverImpl() {
-    // 停止队列处理线程
+    // 停止三线程
     running_ = false;
-    if (queue_processing_thread_.joinable()) {
-        queue_processing_thread_.join();
+    
+    // 唤醒所有等待的线程以便它们能够退出
+    control_cv_.notify_all();
+    receive_cv_.notify_all();
+    
+    if (data_processing_thread_.joinable()) {
+        data_processing_thread_.join();
+    }
+    if (feedback_request_thread_.joinable()) {
+        feedback_request_thread_.join();
+    }
+    if (control_thread_.joinable()) {
+        control_thread_.join();
+        cleanup_cpu_binding();
+    }
+
+    std::cout << "MotorDriverImpl destroyed, all resources cleaned up." << std::endl;
+}
+
+// ========== 新增公共接口实现 ==========
+void MotorDriverImpl::register_feedback_callback(FeedbackCallback callback) {
+    feedback_callback_ = std::move(callback);
+}
+
+void MotorDriverImpl::set_motor_config(const std::map<std::string, std::vector<uint32_t>>& config) {
+    interface_motor_config_ = config;
+    std::cout << "电机配置已设置，开始监控反馈：" << std::endl;
+    for (const auto& [interface, motor_ids] : interface_motor_config_) {
+        std::cout << "  " << interface << ": [";
+        for (size_t i = 0; i < motor_ids.size(); ++i) {
+            std::cout << motor_ids[i];
+            if (i < motor_ids.size() - 1) std::cout << ", ";
+        }
+        std::cout << "]" << std::endl;
+    }
+}
+
+void MotorDriverImpl::send_control_command(const bus::GenericBusPacket& packet) {
+    {
+        std::lock_guard<std::mutex> lock(control_mutex_);
+        
+        // 检查队列大小，实现背压控制
+        if (control_queue_.size() >= MAX_QUEUE_SIZE) {
+            // 队列满时，丢弃最旧的命令，保留最新的命令
+            control_queue_.pop();
+            std::cerr << "Warning: Control queue overflow, dropping oldest command" << std::endl;
+        }
+        
+        control_queue_.push(packet);
+    }
+    control_cv_.notify_one();  // 唤醒控制线程
+}
+
+void MotorDriverImpl::send_other_command(const bus::GenericBusPacket& packet) {
+    try {
+        bus_->send(packet);
+    } catch (const std::exception& e) {
+        std::cerr << "Error sending other command: " << e.what() << std::endl;
     }
 }
 
@@ -43,7 +115,7 @@ void MotorDriverImpl::disable_motor(const std::string interface, const uint32_t 
     packet.id = motor_id;  // 与其他控制命令保持一致
     
     if (motor_protocol::pack_disable_command(packet.data, packet.len)) {
-        send_with_priority(packet, Command::Type::SAFETY_OP);
+        send_control_command(packet);  // 安全命令使用控制线程
     }
 }
 
@@ -53,7 +125,7 @@ void MotorDriverImpl::enable_motor(const std::string interface, const uint32_t m
     packet.id = motor_id;
     
     if (motor_protocol::pack_enable_command(packet.data, packet.len, mode)) {
-        send_with_priority(packet, Command::Type::SAFETY_OP);
+        send_control_command(packet);  // 安全命令使用控制线程
     }
 }
 
@@ -63,7 +135,7 @@ void MotorDriverImpl::send_position_cmd(const std::string interface, const uint3
     packet.id = motor_id;
     
     if (motor_protocol::pack_position_command(packet.data, packet.len, position)) {
-        send_with_priority(packet, Command::Type::CONTROL);
+        send_control_command(packet);
     }
 }
 
@@ -73,7 +145,7 @@ void MotorDriverImpl::send_velocity_cmd(const std::string interface, const uint3
     packet.id = motor_id;
     
     if (motor_protocol::pack_velocity_command(packet.data, packet.len, velocity)) {
-        send_with_priority(packet, Command::Type::CONTROL);
+        send_control_command(packet);
     } 
 }
 
@@ -83,7 +155,7 @@ void MotorDriverImpl::send_effort_cmd(const std::string interface, const uint32_
     packet.id = motor_id;
     
     if (motor_protocol::pack_effort_command(packet.data, packet.len, effort)) {
-        send_with_priority(packet, Command::Type::CONTROL);
+        send_control_command(packet);
     }
 }
 
@@ -93,7 +165,7 @@ void MotorDriverImpl::send_mit_cmd(const std::string interface, const uint32_t m
     packet.id = motor_id;
     
     if (motor_protocol::pack_mit_command(packet.data, packet.len, position, velocity, effort)) {
-        send_with_priority(packet, Command::Type::CONTROL);
+        send_control_command(packet);
     }
 }
 
@@ -103,7 +175,7 @@ void MotorDriverImpl::motor_parameter_read(const std::string interface, const ui
     packet.id = motor_id + 0x600;
     
     if (motor_protocol::pack_param_read(packet.data, packet.len, address)) {
-        send_with_priority(packet, Command::Type::PARAM_OP);
+        send_other_command(packet);
     }
 }
 
@@ -113,7 +185,7 @@ void MotorDriverImpl::motor_parameter_write(const std::string interface, const u
     packet.id = motor_id + 0x600;
     
     if (motor_protocol::pack_param_write(packet.data, packet.len, address, value)) {
-        send_with_priority(packet, Command::Type::PARAM_OP);
+        send_other_command(packet);
     }
 }
 
@@ -123,7 +195,7 @@ void MotorDriverImpl::motor_parameter_write(const std::string interface, const u
     packet.id = motor_id + 0x600;
     
     if (motor_protocol::pack_param_write(packet.data, packet.len, address, value)) {
-        send_with_priority(packet, Command::Type::PARAM_OP);
+        send_other_command(packet);
     }
 }
 
@@ -133,167 +205,322 @@ void MotorDriverImpl::motor_function_operation(const std::string interface, cons
     packet.id = motor_id + 0x400;
     
     if (motor_protocol::pack_function_operation(packet.data, packet.len, operation)) {
-        send_with_priority(packet, Command::Type::FUNCTION_OP);
+        send_other_command(packet);
     }
 }
 
-void MotorDriverImpl::motor_feedback_request(const std::string interface, const uint32_t motor_id) {
-    bus::GenericBusPacket packet;
-    packet.interface = interface;
-    packet.id = motor_id + 0x200;
+// ========== 三线程工作函数实现 ==========
+void MotorDriverImpl::control_worker() {
+    // 设置控制线程的CPU亲和性
+    set_thread_cpu_affinity(timing_config_.control_cpu_core);
     
-    if (motor_protocol::pack_motor_feedback_request(packet.data, packet.len)) {
-        send_with_priority(packet, Command::Type::FEEDBACK_REQUEST);
-    }
-}
-
-void MotorDriverImpl::motor_feedback_request_all(const std::string interface) {
-    bus::GenericBusPacket packet;
-    packet.interface = interface;
-    packet.id = 0; // 广播ID
-    
-    if (motor_protocol::pack_motor_feedback_request_all(packet.data, packet.len)) {
-        send_with_priority(packet, Command::Type::FEEDBACK_REQUEST);
-    }
-}
-
-Motor_Status MotorDriverImpl::get_motor_status(const std::string& interface, uint32_t motor_id) {
-    Motor_Key key{interface, motor_id};
-    auto it = motor_status_map_.find(key);
-    if (it != motor_status_map_.end()) {
-        return it->second;
-    }
-    return Motor_Status{};
-}
-
-void MotorDriverImpl::send_packet(const bus::GenericBusPacket& packet) {
-    // 直接使用锁，确保命令能够发送
-    std::lock_guard<std::mutex> lock(send_mutex_);
-    bus_->send(packet);
-}
-
-void MotorDriverImpl::send_with_priority(const bus::GenericBusPacket& packet, Command::Type type) {
-    Command cmd;
-    cmd.type = type;
-    cmd.packet = packet;
-    
-    // 根据命令类型分配优先级
-    switch (type) {
-        case Command::Type::CONTROL:
-            cmd.priority = CommandPriority::CONTROL_COMMAND;
-            break;
-        case Command::Type::FEEDBACK_REQUEST:
-            cmd.priority = CommandPriority::FEEDBACK_REQUEST;
-            break;
-        case Command::Type::PARAM_OP:
-            // 根据数据包内容判断是读取还是写入
-            if (packet.data[1] == 0x02) {  // 参数写入命令
-                cmd.priority = CommandPriority::PARAM_WRITE;
-            } else {  // 参数读取命令
-                cmd.priority = CommandPriority::PARAM_READ;
-            }
-            break;
-        case Command::Type::FUNCTION_OP:
-            cmd.priority = CommandPriority::FUNCTION_OPERATION;
-            break;
-        case Command::Type::SAFETY_OP:
-            cmd.priority = CommandPriority::SAFETY_COMMAND;
-            break;
-    }
-    
-    cmd.timestamp = std::chrono::steady_clock::now();
-    
-    // 高优先级命令直接发送，使用try_lock避免阻塞
-    if (static_cast<int>(cmd.priority) >= static_cast<int>(CommandPriority::CONTROL_COMMAND)) {
-        // 使用try_lock，如果无法获取锁则等待很短时间
-        std::unique_lock<std::mutex> lock(send_mutex_, std::try_to_lock);
-        if (lock.owns_lock()) {
-            bus_->send(packet);
-        } else {
-            // 等待很短时间再试
-            std::this_thread::sleep_for(std::chrono::microseconds(5)); // 减少到5us
-            lock.lock();
-            bus_->send(packet);
-        }
-        return;
-    }
-    
-    // 低优先级命令放入队列，不立即处理
-    {
-        std::lock_guard<std::mutex> lock(queue_mutex_);
-        command_queue_.push(cmd);
-    }
-}
-
-void MotorDriverImpl::queue_processing_worker() {
     while (running_) {
-        // 处理队列中的低优先级命令
-        std::unique_lock<std::mutex> lock(send_mutex_, std::try_to_lock);
-        if (lock.owns_lock()) {
-            // 处理队列中的命令，限制每次处理的命令数量
-            const int max_commands_per_batch = 5; // 增加批处理数量
-            int processed_count = 0;
+        std::unique_lock<std::mutex> lock(control_mutex_);
+        
+        // 等待控制命令，没有命令时阻塞
+        control_cv_.wait(lock, [this] { 
+            return !running_ || !control_queue_.empty(); 
+        });
+        
+        if (!running_) break;
+        
+        // 批量处理控制命令，保证200us间隔
+        auto next_send_time = std::chrono::steady_clock::now();
+        
+        while (!control_queue_.empty()) {
+            auto packet = control_queue_.front();
+            control_queue_.pop();
+            lock.unlock();
             
-            while (processed_count < max_commands_per_batch) {
-                Command cmd;
-                bool has_command = false;
-                
-                // 从队列中取出一个命令
-                {
-                    std::lock_guard<std::mutex> queue_lock(queue_mutex_);
-                    if (!command_queue_.empty()) {
-                        cmd = command_queue_.top();
-                        command_queue_.pop();
-                        has_command = true;
+            try {
+                // 混合时序控制：粗粒度sleep + 精确忙等待
+                auto now = std::chrono::steady_clock::now();
+                if (next_send_time > now) {
+                    auto remaining_time = next_send_time - now;
+                    
+                    // 如果剩余时间大于50μs，先用sleep_until节省CPU
+                    if (remaining_time > std::chrono::microseconds(50)) {
+                        std::this_thread::sleep_until(next_send_time - std::chrono::microseconds(50));
+                    }
+                    
+                    // 最后50μs用忙等待保证精确时序
+                    while (std::chrono::steady_clock::now() < next_send_time) {
+                        std::this_thread::yield();  // 让出时间片但保持活跃
                     }
                 }
                 
-                if (!has_command) {
-                    break;  // 队列为空，退出
-                }
+                // 发送控制命令
+                bus_->send(packet);
                 
-                // 发送命令
-                bus_->send(cmd.packet);
-                processed_count++;
+                // 更新控制时间，切换到高频模式
+                last_control_time_ = std::chrono::steady_clock::now();
+                high_freq_mode_.store(true, std::memory_order_relaxed);
+                
+                // 计算下次发送时间，使用配置的控制间隔
+                next_send_time += timing_config_.control_interval;
+                
+            } catch (const std::exception& e) {
+                std::cerr << "Error sending control command: " << e.what() << std::endl;
+                // 出错时也要更新下次发送时间，避免时间错乱
+                next_send_time += timing_config_.control_interval;
             }
+            
+            lock.lock();
         }
-        
-        // 休眠一段时间，避免过度占用CPU
-        std::this_thread::sleep_for(std::chrono::microseconds(25)); // 进一步减少到25us
     }
 }
 
+void MotorDriverImpl::feedback_request_worker() {
+    // 使用配置的时序参数
+    const auto& high_freq_interval = timing_config_.high_freq_feedback;
+    const auto& low_freq_interval = timing_config_.low_freq_feedback;
+    const auto& mode_timeout = timing_config_.mode_timeout;
+    
+    auto next_request_time = std::chrono::steady_clock::now();
+    
+    while (running_) {
+        auto now = std::chrono::steady_clock::now();
+        
+        // 检查频率模式切换
+        if (high_freq_mode_.load(std::memory_order_relaxed) && 
+           (now - last_control_time_) > mode_timeout) {
+            high_freq_mode_.store(false, std::memory_order_relaxed);
+        }
+        
+        // 定时发送反馈请求
+        if (now >= next_request_time) {
+            auto interval = high_freq_mode_.load(std::memory_order_relaxed) ? 
+                           high_freq_interval : low_freq_interval;
+            
+            try {
+                for (const auto& [interface, motor_ids] : interface_motor_config_) {
+                    (void) motor_ids;  // 避免未使用变量警告
+                    auto feedback_packet = create_feedback_request_all(interface);
+                    bus_->send(feedback_packet);
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "Error sending feedback request: " << e.what() << std::endl;
+            }
+            
+            next_request_time = now + interval;
+        }
+        
+        // 短暂休眠，避免过度占用CPU
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+}
+
+void MotorDriverImpl::data_processing_worker() {
+    while (running_) {
+        bus::GenericBusPacket packet;
+        {
+            std::unique_lock<std::mutex> lock(receive_mutex_);
+            receive_cv_.wait(lock, [this] { 
+                return !running_ || !receive_queue_.empty(); 
+            });
+            if (!running_) break;
+            packet = std::move(receive_queue_.front());
+            receive_queue_.pop();
+        }
+        handle_bus_packet(packet);  // 处理单个数据包
+    }
+}
+
+bus::GenericBusPacket MotorDriverImpl::create_feedback_request_all(const std::string& interface) {
+    bus::GenericBusPacket packet;
+    packet.interface = interface;
+    packet.id = 0x00;  // 广播ID，请求所有电机反馈
+
+    motor_protocol::pack_motor_feedback_request_all(packet.data, packet.len);
+    return packet;
+}
 
 void MotorDriverImpl::handle_bus_packet(const bus::GenericBusPacket& packet) {
-    std::lock_guard<std::mutex> lock(receive_mutex_);
-    // 使用协议库解析反馈
     auto feedback_opt = motor_protocol::parse_feedback(packet);
-    
-    if (feedback_opt) {
-        // 使用std::visit处理不同类型的反馈
-        std::visit([this](auto&& feedback) {
-            using T = std::decay_t<decltype(feedback)>;
-            if constexpr (std::is_same_v<T, motor_protocol::MotorStatusFeedback>) {
-                // 处理电机状态反馈
-                Motor_Key key{feedback.interface, feedback.motor_id};
-                motor_status_map_[key] = feedback.status;
-#ifdef PRINT_DEBUG
-                std::cout << "Interface: " << feedback.interface << " Motor ID: " 
-                << feedback.motor_id << " enable_flag: " << feedback.status.enable_flag 
-                << " motor_mode: " << feedback.status.motor_mode << " position: " << feedback.status.position
-                << " limit_flag: " << feedback.status.limit_flag << " temperature: " << feedback.status.temperature
-                << " velocity: " << feedback.status.velocity << " voltage: " << feedback.status.voltage
-                << " effort: " << feedback.status.effort << " error_code: " << feedback.status.error_code
-                << std::endl;
-#endif
-            } else if constexpr (std::is_same_v<T, motor_protocol::FuncResultFeedback>) {
-                // 处理函数操作反馈
-                Motor_Key key{feedback.interface, feedback.motor_id};
-            } else if constexpr (std::is_same_v<T, motor_protocol::ParamResultFeedback>) {
-                // 处理参数读写反馈
-                Motor_Key key{feedback.interface, feedback.motor_id};
+    if (!feedback_opt) return;
+
+    // 使用std::visit处理不同类型的反馈
+    std::visit([this](auto&& feedback) {
+        using T = std::decay_t<decltype(feedback)>;
+        
+        if constexpr (std::is_same_v<T, motor_protocol::MotorStatusFeedback>) {
+            // 处理电机状态反馈 - 使用线程安全哈希表，只保存最新状态
+            Motor_Key key{feedback.interface, feedback.motor_id};
+            
+            // 使用shared_mutex的写锁进行更新
+            {
+                std::unique_lock<std::shared_mutex> lock(status_map_mutex_);
+                status_map_[key] = feedback.status;  // 线程安全更新状态
             }
-        }, *feedback_opt);
+            
+            // 立即调用回调函数（向后兼容）
+            if (feedback_callback_) {
+                feedback_callback_(feedback.interface, feedback.motor_id, feedback.status);
+            }
+            
+            // 通知所有观察者
+            notify_motor_status_observers(feedback.interface, feedback.motor_id, feedback.status);
+            
+#ifdef PRINT_DEBUG
+            std::cout << "Interface: " << feedback.interface << " Motor ID: " 
+            << feedback.motor_id << " enable_flag: " << feedback.status.enable_flag 
+            << " motor_mode: " << feedback.status.motor_mode << " position: " << feedback.status.position
+            << " limit_flag: " << feedback.status.limit_flag << " temperature: " << feedback.status.temperature
+            << " velocity: " << feedback.status.velocity << " voltage: " << feedback.status.voltage
+            << " effort: " << feedback.status.effort << " error_code: " << feedback.status.error_code
+            << std::endl;
+#endif
+        } else if constexpr (std::is_same_v<T, motor_protocol::FuncResultFeedback>) {
+            // 处理函数操作反馈
+            std::cout << "Interface: " << feedback.interface << " Motor ID: " 
+                        << feedback.motor_id << " Operation: " << static_cast<int>(feedback.op_code)
+                        << " Success: " << feedback.success << std::endl;
+            
+            // 通知观察者
+            notify_function_result_observers(feedback.interface, feedback.motor_id, feedback.op_code, feedback.success);
+        } else if constexpr (std::is_same_v<T, motor_protocol::ParamResultFeedback>) {
+            // 处理参数读写反馈
+            std::cout << "Interface: " << feedback.interface << " Motor ID: " 
+                        << feedback.motor_id << " Address: " << feedback.addr 
+                        << " Data Type: " << static_cast<int>(feedback.data_type) 
+                        << " Data: ";
+            if (feedback.data_type == 0x01) {  // int
+                std::cout << std::any_cast<int32_t>(feedback.data);
+            } else if (feedback.data_type == 0x02) {  // float   
+                std::cout << std::any_cast<float>(feedback.data);
+            }
+            std::cout << std::endl;
+            
+            // 通知观察者
+            notify_parameter_result_observers(feedback.interface, feedback.motor_id, 
+                                            feedback.addr, feedback.data_type, feedback.data);
+        }
+    }, *feedback_opt);
+}
+
+void MotorDriverImpl::set_thread_cpu_affinity(int cpu_core) {
+    if (cpu_core < 0) return;  // -1表示不设置CPU绑定
+    
+    // 检查系统负载，如果过高则取消绑定
+    double system_load = get_system_load_average();
+    if (system_load > 15.0) {  // 15/20 = 75%负载
+        std::cout << "System load too high (" << system_load 
+                  << "), skipping CPU binding for stability" << std::endl;
+        return;
+    }
+    
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(cpu_core, &cpuset);
+    
+    pthread_t current_thread = pthread_self();
+    int result = pthread_setaffinity_np(current_thread, sizeof(cpuset), &cpuset);
+    
+    if (result == 0) {
+        std::cout << "Thread bound to CPU core " << cpu_core 
+                  << " (system load: " << system_load << ")" << std::endl;
+    } else {
+        std::cerr << "Failed to bind thread to CPU core " << cpu_core 
+                  << ", error: " << result << std::endl;
+    }
+}
+
+double MotorDriverImpl::get_system_load_average() const {
+    double load_avg[3];
+    if (getloadavg(load_avg, 1) == -1) {
+        std::cerr << "Failed to get system load average" << std::endl;
+        return 0.0;  // 获取失败时返回0，允许CPU绑定
+    }
+    return load_avg[0];  // 返回1分钟平均负载
+}
+
+void MotorDriverImpl::cleanup_cpu_binding() {
+    // 重置CPU亲和性为所有核心可用
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    
+    // 设置所有20个核心都可用
+    for (int i = 2; i < 20; ++i) {
+        CPU_SET(i, &cpuset);
+    }
+    
+    pthread_t current_thread = pthread_self();
+    int result = pthread_setaffinity_np(current_thread, sizeof(cpuset), &cpuset);
+    
+    if (result == 0) {
+        std::cout << "CPU binding cleaned up, thread can use all cores" << std::endl;
+    }
+}
+
+// ========== 观察者模式实现 ==========
+void MotorDriverImpl::add_observer(std::shared_ptr<MotorStatusObserver> observer) {
+    std::lock_guard<std::mutex> lock(observers_mutex_);
+    observers_.push_back(std::weak_ptr<MotorStatusObserver>(observer));
+}
+
+void MotorDriverImpl::remove_observer(std::shared_ptr<MotorStatusObserver> observer) {
+    std::lock_guard<std::mutex> lock(observers_mutex_);
+    observers_.erase(
+        std::remove_if(observers_.begin(), observers_.end(),
+            [&observer](const std::weak_ptr<MotorStatusObserver>& weak_obs) {
+                return weak_obs.lock() == observer;
+            }), 
+        observers_.end());
+}
+
+void MotorDriverImpl::notify_motor_status_observers(const std::string& interface, uint32_t motor_id, const Motor_Status& status) {
+    std::lock_guard<std::mutex> lock(observers_mutex_);
+    
+    // 使用迭代器遍历，自动清理失效的观察者
+    for (auto it = observers_.begin(); it != observers_.end(); ) {
+        if (auto observer = it->lock()) {
+            try {
+                observer->on_motor_status_update(interface, motor_id, status);
+                ++it;
+            } catch (const std::exception& e) {
+                std::cerr << "Observer error in motor status update: " << e.what() << std::endl;
+                ++it;
+            }
+        } else {
+            // 移除失效的观察者
+            it = observers_.erase(it);
+        }
+    }
+}
+
+void MotorDriverImpl::notify_function_result_observers(const std::string& interface, uint32_t motor_id, uint8_t op_code, bool success) {
+    std::lock_guard<std::mutex> lock(observers_mutex_);
+    
+    for (auto it = observers_.begin(); it != observers_.end(); ) {
+        if (auto observer = it->lock()) {
+            try {
+                observer->on_motor_function_result(interface, motor_id, op_code, success);
+                ++it;
+            } catch (const std::exception& e) {
+                std::cerr << "Observer error in function result: " << e.what() << std::endl;
+                ++it;
+            }
+        } else {
+            it = observers_.erase(it);
+        }
+    }
+}
+
+void MotorDriverImpl::notify_parameter_result_observers(const std::string& interface, uint32_t motor_id, uint16_t address, uint8_t data_type, const std::any& data) {
+    std::lock_guard<std::mutex> lock(observers_mutex_);
+    
+    for (auto it = observers_.begin(); it != observers_.end(); ) {
+        if (auto observer = it->lock()) {
+            try {
+                observer->on_motor_parameter_result(interface, motor_id, address, data_type, data);
+                ++it;
+            } catch (const std::exception& e) {
+                std::cerr << "Observer error in parameter result: " << e.what() << std::endl;
+                ++it;
+            }
+        } else {
+            it = observers_.erase(it);
+        }
     }
 }
 

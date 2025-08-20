@@ -35,15 +35,10 @@ public:
     virtual void send_effort_cmd(const std::string interface, const uint32_t motor_id, float effort) = 0;
     virtual void send_mit_cmd(const std::string interface, const uint32_t motor_id, float position, float velocity, float effort) = 0;
 
-    virtual void motor_feedback_request(const std::string interface, const uint32_t motor_id) = 0;
-    virtual void motor_feedback_request_all(const std::string interface) = 0;
-
     virtual void motor_function_operation(const std::string interface, const uint32_t motor_id, uint8_t operation) = 0;
     virtual void motor_parameter_write(const std::string interface, const uint32_t motor_id, uint16_t address, int32_t value) = 0;
     virtual void motor_parameter_write(const std::string interface, const uint32_t motor_id, uint16_t address, float value) = 0;
     virtual void motor_parameter_read(const std::string interface, const uint32_t motor_id, uint16_t address) = 0;
-    
-    virtual Motor_Status get_motor_status(const std::string& interface, uint32_t motor_id) = 0;
 };
 
 

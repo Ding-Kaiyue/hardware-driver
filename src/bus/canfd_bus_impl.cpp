@@ -21,22 +21,27 @@ CanFdBus::CanFdBus(const std::vector<std::string>& interfaces)
 
 CanFdBus::~CanFdBus() {
     running_ = false;
+    
+    // 等待一小段时间让接收循环自然结束
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    
     for (auto& thread : receive_threads_) {
         if (thread.joinable()) {
             thread.join();
         }
     }
     receive_threads_.clear();
-    // for (const auto& pair : interface_sockets_) {
-    //     const std::string& interface_name = pair.first;
-        
-    //     std::string down_cmd = "ip link set " + interface_name + " down";
-    //     if (system(down_cmd.c_str()) != 0) {
-    //         // 不要在析构函数中抛异常，改为日志输出
-    //         // throw std::runtime_error("Failed to bring down interface " + interface_name);
-    //         std::cerr << "[CanFdBus] Failed to bring down interface " << interface_name << std::endl;
-    //     }
-    // }
+    
+    // 关闭所有socket连接
+    for (auto& pair : interface_sockets_) {
+        if (pair.second && *pair.second >= 0) {
+            close(*pair.second);
+        }
+    }
+    interface_sockets_.clear();
+    
+    // 额外的清理延时，避免内核队列溢出警告
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
 }
 
 /**

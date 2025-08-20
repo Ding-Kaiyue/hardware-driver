@@ -13,6 +13,12 @@
 #include <atomic>
 #include <vector>
 #include <thread>
+#include <condition_variable>
+#include <shared_mutex>
+#include <pthread.h>
+#include <any>
+#include <memory>
+#include <map>
 
 // MotorKey 结构体和哈希
 struct Motor_Key {
@@ -36,8 +42,53 @@ struct hash<Motor_Key> {
 namespace hardware_driver {
 namespace motor_driver {
 
+// 电机状态观察者接口
+class MotorStatusObserver {
+public:
+    virtual ~MotorStatusObserver() = default;
+    
+    // 单个电机状态更新事件
+    virtual void on_motor_status_update(const std::string& interface, 
+                                       uint32_t motor_id, 
+                                       const Motor_Status& status) = 0;
+    
+    // 批量电机状态更新事件 - 一个接口的所有电机状态
+    virtual void on_motor_status_update(const std::string& /*interface*/,
+                                       const std::map<uint32_t, Motor_Status>& /*status_all*/) {}
+    
+    // 函数操作结果事件
+    virtual void on_motor_function_result(const std::string& /*interface*/,
+                                         uint32_t /*motor_id*/,
+                                         uint8_t /*op_code*/,
+                                         bool /*success*/) {}
+    
+    // 参数读写结果事件
+    virtual void on_motor_parameter_result(const std::string& /*interface*/,
+                                          uint32_t /*motor_id*/,
+                                          uint16_t /*address*/,
+                                          uint8_t /*data_type*/,
+                                          const std::any& /*data*/) {}
+};
+
+// 可配置的时序参数结构体
+struct TimingConfig {
+    std::chrono::microseconds control_interval{200};     // 控制命令间隔
+    std::chrono::microseconds high_freq_feedback{400};   // 高频反馈间隔 (2.5kHz)
+    std::chrono::milliseconds low_freq_feedback{50};     // 低频反馈间隔 (20Hz)
+    std::chrono::milliseconds mode_timeout{100};         // 高频模式超时
+    int control_cpu_core{4};                           // 控制线程CPU绑定 (-1表示不绑定)(2~5 P核心可以获得最佳实时性能)
+};
+
 class MotorDriverImpl : public MotorDriverInterface {
 public:
+    // 队列大小限制
+    static constexpr size_t MAX_QUEUE_SIZE = 1000;
+    
+    // 回调函数类型定义
+    using FeedbackCallback = std::function<void(const std::string& interface, 
+                                               uint32_t motor_id, 
+                                               const Motor_Status& status)>;
+
     explicit MotorDriverImpl(std::shared_ptr<bus::BusInterface> bus);
     ~MotorDriverImpl() override;
 
@@ -53,59 +104,74 @@ public:
     void motor_parameter_write(const std::string interface, const uint32_t motor_id, uint16_t address, float value) override;
     void motor_function_operation(const std::string interface, const uint32_t motor_id, uint8_t operation) override;
 
-    void motor_feedback_request(const std::string interface, const uint32_t motor_id) override;
-    void motor_feedback_request_all(const std::string interface) override;
+    // 新增公共接口
+    void register_feedback_callback(FeedbackCallback callback);
+    void send_control_command(const bus::GenericBusPacket& packet);
+    void send_other_command(const bus::GenericBusPacket& packet);
 
-    Motor_Status get_motor_status(const std::string& interface, uint32_t motor_id) override;
+    // 设置要监控的电机配置（用于反馈请求）
+    void set_motor_config(const std::map<std::string, std::vector<uint32_t>>& config);
+
+    // 观察者模式接口
+    void add_observer(std::shared_ptr<MotorStatusObserver> observer);
+    void remove_observer(std::shared_ptr<MotorStatusObserver> observer);
     
 private:
     std::shared_ptr<bus::BusInterface> bus_;
-    std::unordered_map<Motor_Key, Motor_Status> motor_status_map_;
-    std::mutex send_mutex_;      // 保护发送操作
-    std::mutex receive_mutex_;   // 保护接收操作
+    // 简化的状态存储 - 使用线程安全哈希表，只保存最新状态
+    std::unordered_map<Motor_Key, Motor_Status> status_map_;
+    mutable std::shared_mutex status_map_mutex_;  // 读写锁，支持多读者单写者
+    FeedbackCallback feedback_callback_;
+    
+    // 观察者模式支持
+    std::vector<std::weak_ptr<MotorStatusObserver>> observers_;
+    std::mutex observers_mutex_;  // 保护观察者列表
 
-    // 命令优先级队列
-    enum class CommandPriority : int {
-        // 高优先级 (8-10): 紧急、安全、控制命令
-        EMERGENCY_STOP = 10,      // 紧急停止 (最高优先级)
-        SAFETY_COMMAND = 9,       // 安全相关命令 (失能、使能) - 高优先级
-        CONTROL_COMMAND = 8,      // 控制命令 (位置、速度、力矩) - 高优先级
-        
-        // 中优先级 (4-7): 参数操作、函数操作
-        PARAM_WRITE = 7,          // 参数写入
-        PARAM_READ = 6,           // 参数读取
-        FUNCTION_OPERATION = 5,   // 函数操作
-        STATUS_QUERY = 4,         // 状态查询
-        
-        // 低优先级 (1-3): 反馈请求、调试命令
-        FEEDBACK_REQUEST = 3,     // 反馈请求 (低优先级，可被抢占)
-        DEBUG_COMMAND = 2,        // 调试命令
-        IDLE_COMMAND = 1          // 空闲命令 (最低优先级)
-    };
+    // 控制命令队列和同步
+    std::queue<bus::GenericBusPacket> control_queue_;
+    std::mutex control_mutex_;
+    std::condition_variable control_cv_;
     
-    struct Command {
-        enum class Type { CONTROL, FEEDBACK_REQUEST, PARAM_OP, FUNCTION_OP, SAFETY_OP } type;
-        bus::GenericBusPacket packet;
-        CommandPriority priority;
-        std::chrono::steady_clock::time_point timestamp;
-        
-        bool operator<(const Command& other) const {
-            return static_cast<int>(priority) < static_cast<int>(other.priority);  // 优先级高的先执行
-        }
-    };
+    // 接收数据队列和同步
+    std::queue<bus::GenericBusPacket> receive_queue_;
+    std::mutex receive_mutex_;
+    std::condition_variable receive_cv_;
+
+    // 频率控制
+    std::atomic<bool> high_freq_mode_{false};
+    std::chrono::steady_clock::time_point last_control_time_;
+    std::map<std::string, std::vector<uint32_t>> interface_motor_config_;
     
-    std::priority_queue<Command> command_queue_;
-    std::mutex queue_mutex_;
-    
-    // 队列处理线程
-    std::thread queue_processing_thread_;
+    // 时序参数
+    TimingConfig timing_config_;
+
+    // 三线程架构
+    std::thread feedback_request_thread_;   // 反馈线程：发送请求
+    std::thread data_processing_thread_;   // 数据处理线程：处理接收队列
+    std::thread control_thread_;    // 控制线程：专门发送控制命令
     std::atomic<bool> running_{true};
 
-    void send_packet(const bus::GenericBusPacket& packet);
-    void send_feedback_packet(const bus::GenericBusPacket& packet);  // 专门用于反馈请求
-    void handle_bus_packet(const bus::GenericBusPacket& packet);
-    void send_with_priority(const bus::GenericBusPacket& packet, Command::Type type);
-    void queue_processing_worker();  // 队列处理工作线程
+    // 三线程工作函数
+    void feedback_request_worker();        // 反馈请求线程：定时发送反馈请求
+    void data_processing_worker();         // 数据处理线程：阻塞处理接收队列  
+    void control_worker();                 // 控制线程：发送控制命令
+    
+    // 数据处理函数  
+    void handle_bus_packet(const bus::GenericBusPacket& packet);  // 处理单个数据包
+    // 请求反馈数据
+    bus::GenericBusPacket create_feedback_request_all(const std::string& interface);
+    
+    // CPU亲和性设置
+    void set_thread_cpu_affinity(int cpu_core);
+    
+    // 系统负载检测和自适应CPU绑定
+    double get_system_load_average() const;
+    void cleanup_cpu_binding();
+    
+    // 通知观察者的私有方法
+    void notify_motor_status_observers(const std::string& interface, uint32_t motor_id, const Motor_Status& status);
+    void notify_function_result_observers(const std::string& interface, uint32_t motor_id, uint8_t op_code, bool success);
+    void notify_parameter_result_observers(const std::string& interface, uint32_t motor_id, uint16_t address, uint8_t data_type, const std::any& data);
 };
 
 }    // namespace motor_driver

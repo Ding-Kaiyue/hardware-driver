@@ -21,6 +21,8 @@ if(BUILD_TESTS)
 endif()
 find_package(Threads REQUIRED)
 
+# TBB库已移除，使用std::unordered_map + std::shared_mutex替代
+
 # === canfd 组合 ===
 add_library(arm_with_omnipicker_canfd SHARED
   src/bus/canfd_bus_impl.cpp
@@ -30,13 +32,16 @@ add_library(arm_with_omnipicker_canfd SHARED
   src/protocol/gripper_omnipicker_protocol.cpp
   src/interface/robot_hardware.cpp
 )
-target_link_libraries(arm_with_omnipicker_canfd Threads::Threads)
+# 设置链接库
+set(HARDWARE_DRIVER_LIBS Threads::Threads)
+
+target_link_libraries(arm_with_omnipicker_canfd ${HARDWARE_DRIVER_LIBS})
 target_include_directories(arm_with_omnipicker_canfd PRIVATE src include)
 
 # 设置库的版本信息
 set_target_properties(arm_with_omnipicker_canfd PROPERTIES
-  VERSION 1.0.0
-  SOVERSION 1
+  VERSION 2.0.0
+  SOVERSION 2
   OUTPUT_NAME "hardware_driver"
 )
 
@@ -58,26 +63,23 @@ set_target_properties(arm_with_omnipicker_canfd PROPERTIES
 # target_link_libraries(arm_with_omnipicker_ethercat Threads::Threads)
 # target_include_directories(arm_with_omnipicker_ethercat PRIVATE src)
 
-# 添加简单示例
-add_executable(simple_example examples/simple_example.cpp)
-target_link_libraries(simple_example
-  arm_with_omnipicker_canfd
-  Threads::Threads
-)
-
-# 添加简化版本测试
-add_executable(test_simplified_version test_simplified.cpp)
-target_link_libraries(test_simplified_version
-  arm_with_omnipicker_canfd
-  Threads::Threads
-)
-
-# 添加回调功能测试
-add_executable(test_callback test_callback.cpp)
-target_link_libraries(test_callback
-  arm_with_omnipicker_canfd
-  Threads::Threads
-)
+# === 示例程序构建 ===
+# 查找所有示例文件并构建到build/examples
+file(GLOB EXAMPLE_SOURCES examples/*.cpp)
+if(EXAMPLE_SOURCES)
+  foreach(EXAMPLE_FILE ${EXAMPLE_SOURCES})
+    get_filename_component(EXAMPLE_NAME ${EXAMPLE_FILE} NAME_WE)
+    
+    add_executable(${EXAMPLE_NAME} ${EXAMPLE_FILE})
+    set_target_properties(${EXAMPLE_NAME} PROPERTIES
+      RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/examples
+    )
+    target_link_libraries(${EXAMPLE_NAME}
+      arm_with_omnipicker_canfd
+      ${HARDWARE_DRIVER_LIBS}
+    )
+  endforeach()
+endif()
 
 # === 安装头文件和so ===
 install(DIRECTORY include/hardware_driver DESTINATION include)
@@ -104,7 +106,7 @@ install(TARGETS
 include(CMakePackageConfigHelpers)
 write_basic_package_version_file(
   "${CMAKE_CURRENT_BINARY_DIR}/hardware_driverConfigVersion.cmake"
-  VERSION 1.0.0
+  VERSION 2.0.0
   COMPATIBILITY AnyNewerVersion
 )
 
@@ -126,56 +128,41 @@ install(EXPORT hardware_driverTargets
   DESTINATION lib/cmake/hardware_driver
 )
 
-# === gtest集成 ===
-# 只有在启用测试选项且找到 GTest 时才构建测试
-if(BUILD_TESTS AND GTest_FOUND)
-  message(STATUS "BUILD_TESTS is ON and GTest found, building tests")
-  
-  # 创建tests目录
-  file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
-
-  # 查找所有测试文件
-  file(GLOB TEST_SOURCES tests/*.cpp)
-  if(TEST_SOURCES)
-    # 为每个测试文件创建单独的可执行文件
-    foreach(TEST_FILE ${TEST_SOURCES})
-      # 获取文件名（不含扩展名）
-      get_filename_component(TEST_NAME ${TEST_FILE} NAME_WE)
-      
-      # 创建测试可执行文件
-      add_executable(${TEST_NAME} ${TEST_FILE})
-      
-      # 设置输出目录到build/tests
-      set_target_properties(${TEST_NAME} PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests
-      )
-      
-      # 链接库
-      set(TEST_LIBS
-        arm_with_omnipicker_canfd
-        GTest::gtest
-        GTest::gtest_main
-        Threads::Threads
-      )
-      
-      # 如果 GMock 可用，则添加它
-      if(TARGET GTest::gmock)
-        list(APPEND TEST_LIBS GTest::gmock)
-      endif()
-      if(TARGET GTest::gmock_main)
-        list(APPEND TEST_LIBS GTest::gmock_main)
-      endif()
-      
-      target_link_libraries(${TEST_NAME} ${TEST_LIBS})
-      
-      # 添加到CTest
-      add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
-    endforeach()
+# === 单元测试构建 ===
+if(BUILD_TESTS)
+  find_package(GTest QUIET)
+  if(GTest_FOUND)
+    enable_testing()
+    message(STATUS "GTest found, building tests to build/tests/")
+    
+    # 查找所有测试文件并构建到build/tests
+    file(GLOB TEST_SOURCES tests/*.cpp)
+    if(TEST_SOURCES)
+      foreach(TEST_FILE ${TEST_SOURCES})
+        get_filename_component(TEST_NAME ${TEST_FILE} NAME_WE)
+        
+        add_executable(${TEST_NAME} ${TEST_FILE})
+        set_target_properties(${TEST_NAME} PROPERTIES
+          RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests
+        )
+        
+        # 链接所需库
+        target_link_libraries(${TEST_NAME}
+          arm_with_omnipicker_canfd
+          GTest::gtest
+          GTest::gtest_main
+          GTest::gmock
+          GTest::gmock_main
+          ${HARDWARE_DRIVER_LIBS}
+        )
+        
+        # 添加到CTest
+        add_test(NAME ${TEST_NAME} COMMAND $<TARGET_FILE:${TEST_NAME}>)
+      endforeach()
+    endif()
+  else()
+    message(WARNING "BUILD_TESTS=ON but GTest not found. Install GTest or use -DBUILD_TESTS=OFF")
   endif()
 else()
-  if(NOT BUILD_TESTS)
-    message(STATUS "BUILD_TESTS is OFF, skipping tests (use -DBUILD_TESTS=ON to enable)")
-  elseif(NOT GTest_FOUND)
-    message(STATUS "GTest not found, skipping tests")
-  endif()
+  message(STATUS "BUILD_TESTS=OFF, skipping tests (use -DBUILD_TESTS=ON to enable)")
 endif()

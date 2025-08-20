@@ -15,6 +15,8 @@
 
 #include <chrono>
 #include "hardware_driver/driver/motor_driver_interface.hpp"
+#include "driver/motor_driver_impl.hpp"
+#include "bus/canfd_bus_impl.hpp"
 
 // ========== 轨迹数据结构定义 ==========
 // 简化的轨迹点结构（不依赖ROS2消息）
@@ -33,20 +35,22 @@ struct Trajectory {
 
 // 电机状态回调函数类型定义
 using MotorStatusCallback = std::function<void(const std::string& interface, uint32_t motor_id, const hardware_driver::motor_driver::Motor_Status& status)>;
+using MotorBatchStatusCallback = std::function<void(const std::string& interface, const std::map<uint32_t, hardware_driver::motor_driver::Motor_Status>& status_all)>;
 
 class RobotHardware {
 public:
-    // 使用map配置每个接口对应的电机ID列表
+    // 单个状态回调构造函数（默认构造函数，用于观察者模式）
     RobotHardware(std::shared_ptr<hardware_driver::motor_driver::MotorDriverInterface> motor_driver,
                   const std::map<std::string, std::vector<uint32_t>>& interface_motor_config,
                   MotorStatusCallback callback = nullptr);
+    
+    // 批量状态回调构造函数（明确需要传入回调函数）
+    RobotHardware(std::shared_ptr<hardware_driver::motor_driver::MotorDriverInterface> motor_driver,
+                  const std::map<std::string, std::vector<uint32_t>>& interface_motor_config,
+                  MotorBatchStatusCallback batch_callback);
     ~RobotHardware();
 
-    // ========== 电机状态获取接口 ==========
-    hardware_driver::motor_driver::Motor_Status get_motor_status(const std::string& interface, const uint32_t motor_id);
-    // 返回所有或指定接口的电机状态
-    std::map<std::pair<std::string, uint32_t>, hardware_driver::motor_driver::Motor_Status>
-    get_all_motor_status(const std::string& interface = "");
+    // 状态获取通过回调机制实现，不需要主动查询接口
     
     // ========== 电机控制接口 ==========
     void control_motor_in_mit_mode(const std::string& interface, const uint32_t motor_id, float position, float velocity, float effort);
@@ -70,45 +74,25 @@ public:
     // ========== 函数操作接口 ==========
     void motor_function_operation(const std::string& interface, const uint32_t motor_id, uint8_t operation);
     void arm_zero_position_set(const std::string& interface, const std::vector<uint32_t> motor_ids);
-    
-    // ========== 反馈请求接口 ==========
-    void motor_feedback_request(const std::string& interface, const uint32_t motor_id);
-    void motor_feedback_request_all(const std::string& interface);
-    
+        
     // ========== 轨迹执行接口 ==========
     bool execute_trajectory(const std::string& interface, const Trajectory& trajectory);
     
 private:
-    std::atomic<bool> high_freq_mode_{false};
-    std::chrono::steady_clock::time_point last_control_time_;
-    void update_control_time();
-    
-    // 时序控制相关
-    std::unordered_map<std::string, std::chrono::steady_clock::time_point> interface_last_send_time_;
-    std::mutex timing_mutex_;
-    void ensure_send_interval(const std::string& interface, std::chrono::microseconds min_interval = std::chrono::microseconds(100));
-    
     std::shared_ptr<hardware_driver::motor_driver::MotorDriverInterface> motor_driver_;
     std::map<std::string, std::vector<uint32_t>> interface_motor_config_;  // 每个接口对应的电机ID列表
-    std::atomic<bool> running_;
 
-    // 线程
-    std::thread feedback_request_thread_;
-    std::thread feedback_process_thread_;
-    void request_feedback_thread();
-    void process_feedback_thread();
-
-    std::mutex status_mutex_;
-    // std::map<std::pair<std::string, uint32_t>, hardware_driver::motor_driver::Motor_Status> status_map_;
-    std::unordered_map<std::string_view, std::unordered_map<uint32_t, hardware_driver::motor_driver::Motor_Status>> status_map_;
-    
-    // 事件驱动相关
-    std::mutex feedback_mutex_;
-    std::condition_variable feedback_cv_;
-    std::atomic<bool> has_new_feedback_{false};
-    
-    // 状态回调函数
+    // 状态回调函数（传递给motor_driver_impl）
     MotorStatusCallback status_callback_;
+    MotorBatchStatusCallback batch_status_callback_;
+    
+    // 状态聚合器相关
+    std::map<std::string, std::map<uint32_t, hardware_driver::motor_driver::Motor_Status>> status_cache_;
+    std::mutex cache_mutex_;
+    
+    // 内部状态聚合方法
+    void handle_motor_status_with_aggregation(const std::string& interface, uint32_t motor_id, 
+                                            const hardware_driver::motor_driver::Motor_Status& status);
     
 };
 

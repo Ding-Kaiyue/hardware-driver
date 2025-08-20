@@ -49,3 +49,4 @@ Thumbs.db
 # 构建脚本（本地保留，不上传）
 build_*.sh
 create_release_package.sh
+create_debian_package.sh
