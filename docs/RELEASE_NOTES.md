@@ -1,6 +1,6 @@
 # 发布说明
 
-## v2.0.0 - 2024-01-XX (重大版本更新)
+## v2.0.0 - 2025-08-20 (重大版本更新)
 
 ### 🚀 重大特性
 
@@ -101,17 +101,6 @@ class MyObserver : public MotorStatusObserver {
 
 ### 🏗️ 迁移指南
 
-#### 自动迁移工具
-提供脚本协助从v1.x迁移：
-```bash
-# 下载迁移工具
-wget https://raw.githubusercontent.com/your-repo/migration/v1-to-v2.sh
-chmod +x v1-to-v2.sh
-
-# 运行迁移检查
-./v1-to-v2.sh check your_project/
-```
-
 #### 手动迁移步骤
 1. 更新包含头文件路径
 2. 替换旧的API调用
@@ -153,32 +142,19 @@ sudo ldconfig
 
 #### 2. 发布包安装
 ```bash
-wget https://github.com/Ding-Kaiyue/hardware-driver/releases/download/v1.0.0/hardware_driver_v1.0.0.tar.gz
-tar -xzf hardware_driver_v1.0.0.tar.gz
+wget https://github.com/Ding-Kaiyue/hardware-driver/releases/download/v2.0.0/hardware_driver_v2.0.0.tar.gz
+tar -xzf hardware_driver_v2.0.0.tar.gz
 cd hardware_driver_release
 sudo ./install.sh
 ```
 
-#### 3. APT安装
-```bash
-# 添加仓库密钥
-wget -qO - https://ding-kaiyue.github.io/hardware-driver/gpg.key | sudo apt-key add -
-
-# 添加仓库
-echo "deb [arch=amd64] https://ding-kaiyue.github.io/hardware-driver jammy main" | sudo tee /etc/apt/sources.list.d/hardware-driver.list
-
-# 更新并安装
-sudo apt update
-sudo apt install libhardware-driver0 libhardware-driver-dev
-```
-
-#### 4. Debian包安装
+#### 3. Debian包安装
 ```bash
 # 下载并安装
-wget https://github.com/Ding-Kaiyue/hardware-driver/releases/download/v1.0.0/libhardware-driver0_1.0.0_amd64.deb
-wget https://github.com/Ding-Kaiyue/hardware-driver/releases/download/v1.0.0/libhardware-driver-dev_1.0.0_amd64.deb
-sudo dpkg -i libhardware-driver0_1.0.0_amd64.deb
-sudo dpkg -i libhardware-driver-dev_1.0.0_amd64.deb
+wget https://github.com/Ding-Kaiyue/hardware-driver/releases/download/v1.0.0/libhardware-driver0_2.0.0_amd64.deb
+wget https://github.com/Ding-Kaiyue/hardware-driver/releases/download/v1.0.0/libhardware-driver-dev_2.0.0_amd64.deb
+sudo dpkg -i libhardware-driver0_2.0.0_amd64.deb
+sudo dpkg -i libhardware-driver-dev_2.0.0_amd64.deb
 sudo apt-get install -f
 ```
 
@@ -187,6 +163,7 @@ sudo apt-get install -f
 - 修复了CAN接口初始化问题
 - 改进了错误处理机制
 - 优化了内存管理
+- 更改了电机数据的获取方式
 
 ### 📚 文档更新
 
@@ -202,7 +179,7 @@ sudo apt-get install -f
 | 版本 | 兼容性 | 状态 | 支持期限 |
 |------|--------|------|----------|
 | v2.0.x | 当前版本 | 🟢 活跃开发 | 长期支持 |
-| v1.0.x | 遗留版本 | 🟡 维护模式 | 2024年底 |
+| v1.0.x | 遗留版本 | 🟡 停止维护 | 2025年8月 |
 
 ## 升级建议
 
@@ -214,14 +191,14 @@ sudo apt-get install -f
 
 如果您在升级过程中遇到任何问题，请：
 
-1. 查阅[迁移指南](../README.md#从v10迁移)
-2. 搜索现有的[GitHub Issues](https://github.com/your-username/hardware_driver_lib/issues)
+1. 查阅[迁移指南](../README.md#从v1.0迁移)
+2. 搜索现有的[GitHub Issues](https://github.com/Ding-Kaiyue/hardware_driver_lib/issues)
 3. 提交新的Issue或联系技术支持
 
 ### 📞 联系方式
 
 - **Email**: kaiyue.ding@raysense.com
 - **微信**: d18292819833
-- **GitHub**: [Issues](https://github.com/your-username/hardware_driver_lib/issues)
+- **GitHub**: [Issues](https://github.com/Ding-Kaiyue/hardware_driver_lib/issues)
 
 我们承诺为所有用户提供平滑的升级体验！

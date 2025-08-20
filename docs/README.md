@@ -12,6 +12,7 @@
 ### 👨‍💻 开发者文档
 - **[DEVELOPER.md](DEVELOPER.md)** - 开发者指南，架构设计，开发流程
 - **[DOCUMENTATION.md](DOCUMENTATION.md)** - API文档和使用示例
+- **[EVENT_BUS_GUIDE.md](EVENT_BUS_GUIDE.md)** - 事件总线使用指南
 
 ### 🤝 社区指南
 - **[CONTRIBUTING.md](../.github/CONTRIBUTING.md)** - 贡献指南
