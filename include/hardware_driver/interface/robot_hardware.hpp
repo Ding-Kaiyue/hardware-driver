@@ -17,6 +17,7 @@
 #include "hardware_driver/driver/motor_driver_interface.hpp"
 #include "driver/motor_driver_impl.hpp"
 #include "bus/canfd_bus_impl.hpp"
+#include "hardware_driver/event/event_bus.hpp"
 
 // ========== 轨迹数据结构定义 ==========
 // 简化的轨迹点结构（不依赖ROS2消息）
@@ -48,6 +49,11 @@ public:
     RobotHardware(std::shared_ptr<hardware_driver::motor_driver::MotorDriverInterface> motor_driver,
                   const std::map<std::string, std::vector<uint32_t>>& interface_motor_config,
                   MotorBatchStatusCallback batch_callback);
+    
+    // 事件总线构造函数（推荐用于新项目）
+    RobotHardware(std::shared_ptr<hardware_driver::motor_driver::MotorDriverInterface> motor_driver,
+                  const std::map<std::string, std::vector<uint32_t>>& interface_motor_config,
+                  std::shared_ptr<hardware_driver::event::EventBus> event_bus);
     ~RobotHardware();
 
     // 状态获取通过回调机制实现，不需要主动查询接口
@@ -85,6 +91,9 @@ private:
     // 状态回调函数（传递给motor_driver_impl）
     MotorStatusCallback status_callback_;
     MotorBatchStatusCallback batch_status_callback_;
+    
+    // 事件总线支持
+    std::shared_ptr<hardware_driver::event::EventBus> event_bus_;
     
     // 状态聚合器相关
     std::map<std::string, std::map<uint32_t, hardware_driver::motor_driver::Motor_Status>> status_cache_;

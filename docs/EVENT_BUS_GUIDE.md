@@ -64,12 +64,85 @@ motor_driver.add_observer(event_bridge);
 ### MotorParameterResultEvent
 电机参数读写结果事件，包含地址、数据类型和数值。
 
-## 主题命名规范
+## 主题订阅详细说明
+
+### 可订阅的主题类型
+
+#### 1. 单个电机状态事件 (MotorStatusEvent)
+- **主题格式**: `motor.{interface}.{motor_id}.status`
+- **示例主题**:
+  - `motor.can0.1.status` - CAN0接口上1号电机的状态
+  - `motor.can1.3.status` - CAN1接口上3号电机的状态
+- **用途**: 监控特定电机的实时状态（位置、速度、力矩等）
+
+```cpp
+// 订阅特定电机状态
+event_bus->subscribe_topic<MotorStatusEvent>("motor.can0.1.status", 
+    [](const auto& event) {
+        std::cout << "电机位置: " << event->get_status().position << std::endl;
+    });
+```
+
+#### 2. 批量电机状态事件 (MotorBatchStatusEvent)
+- **主题格式**: `motor.{interface}.batch.status`
+- **示例主题**:
+  - `motor.can0.batch.status` - CAN0接口上所有电机的批量状态
+  - `motor.can1.batch.status` - CAN1接口上所有电机的批量状态
+- **用途**: 一次性获取整个接口的所有电机状态
+
+```cpp
+// 订阅批量电机状态
+event_bus->subscribe_topic<MotorBatchStatusEvent>("motor.can0.batch.status",
+    [](const auto& event) {
+        for (const auto& [motor_id, status] : event->get_status_all()) {
+            std::cout << "电机" << motor_id << "位置: " << status.position << std::endl;
+        }
+    });
+```
+
+#### 3. 电机功能操作结果事件 (MotorFunctionResultEvent)
+- **主题格式**: `motor.{interface}.{motor_id}.function`
+- **示例主题**:
+  - `motor.can0.1.function` - CAN0接口上1号电机的功能操作结果
+  - `motor.can1.2.function` - CAN1接口上2号电机的功能操作结果
+- **用途**: 监控电机功能调用结果（启用/禁用、模式切换等）
+
+```cpp
+// 订阅电机功能操作结果
+event_bus->subscribe_topic<MotorFunctionResultEvent>("motor.can0.1.function",
+    [](const auto& event) {
+        std::cout << "操作码: " << static_cast<int>(event->get_operation_code())
+                  << " 结果: " << (event->is_success() ? "成功" : "失败") << std::endl;
+    });
+```
+
+#### 4. 电机参数操作结果事件 (MotorParameterResultEvent)
+- **主题格式**: `motor.{interface}.{motor_id}.parameter`
+- **示例主题**:
+  - `motor.can0.1.parameter` - CAN0接口上1号电机的参数操作结果
+  - `motor.can1.5.parameter` - CAN1接口上5号电机的参数操作结果
+- **用途**: 监控参数读写操作结果
+
+```cpp
+// 订阅电机参数操作结果
+event_bus->subscribe_topic<MotorParameterResultEvent>("motor.can0.1.parameter",
+    [](const auto& event) {
+        std::cout << "参数地址: 0x" << std::hex << event->get_address()
+                  << " 数据类型: " << static_cast<int>(event->get_data_type()) << std::endl;
+    });
+```
+
+### 主题命名规范
 
 事件主题采用层次化命名：
 - `motor.{interface}.{motor_id}.status` - 电机状态
 - `motor.{interface}.{motor_id}.function` - 函数操作
 - `motor.{interface}.{motor_id}.parameter` - 参数操作
+- `motor.{interface}.batch.status` - 批量状态
+
+其中：
+- `{interface}`: 总线接口名称（如 can0, can1, ethercat0 等）
+- `{motor_id}`: 电机ID（数字，如 1, 2, 3 等）
 
 ## 线程安全
 

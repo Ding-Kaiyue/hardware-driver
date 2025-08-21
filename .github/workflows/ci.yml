@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install dependencies
       run: |
@@ -25,19 +25,25 @@ jobs:
         cmake ..
         make -j$(nproc)
 
-    - name: Build example
-      run: |
-        cd build
-        make simple_example
-
-    - name: Build tests (skip execution)
+    - name: Build examples
       run: |
         cd build
         make -j$(nproc)
+        ls -la examples/ || echo "No examples built"
+
+    - name: Build tests with BUILD_TESTS=ON
+      run: |
+        cd build
+        cmake -DBUILD_TESTS=ON ..
+        make -j$(nproc)
         echo "Tests built successfully (not executed due to hardware requirements)"
 
-    - name: Check library files
+    - name: Check build artifacts
       run: |
-        ls -la build/
+        echo "=== Library files ==="
+        ls -la build/lib/ || echo "No lib directory"
+        echo "=== Example files ==="
+        ls -la build/examples/ || echo "No examples directory"
+        echo "=== Test files ==="
         ls -la build/tests/ || echo "No tests directory"
         echo "Build completed successfully!"

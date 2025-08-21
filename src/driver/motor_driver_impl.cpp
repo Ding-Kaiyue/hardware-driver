@@ -361,6 +361,9 @@ void MotorDriverImpl::handle_bus_packet(const bus::GenericBusPacket& packet) {
             // 通知所有观察者
             notify_motor_status_observers(feedback.interface, feedback.motor_id, feedback.status);
             
+            // 发布事件总线事件
+            emit_motor_status_event(feedback.interface, feedback.motor_id, feedback.status);
+            
 #ifdef PRINT_DEBUG
             std::cout << "Interface: " << feedback.interface << " Motor ID: " 
             << feedback.motor_id << " enable_flag: " << feedback.status.enable_flag 
@@ -378,6 +381,9 @@ void MotorDriverImpl::handle_bus_packet(const bus::GenericBusPacket& packet) {
             
             // 通知观察者
             notify_function_result_observers(feedback.interface, feedback.motor_id, feedback.op_code, feedback.success);
+            
+            // 发布事件总线事件
+            emit_motor_function_result_event(feedback.interface, feedback.motor_id, feedback.op_code, feedback.success);
         } else if constexpr (std::is_same_v<T, motor_protocol::ParamResultFeedback>) {
             // 处理参数读写反馈
             std::cout << "Interface: " << feedback.interface << " Motor ID: " 
@@ -393,6 +399,10 @@ void MotorDriverImpl::handle_bus_packet(const bus::GenericBusPacket& packet) {
             
             // 通知观察者
             notify_parameter_result_observers(feedback.interface, feedback.motor_id, 
+                                            feedback.addr, feedback.data_type, feedback.data);
+            
+            // 发布事件总线事件
+            emit_motor_parameter_result_event(feedback.interface, feedback.motor_id, 
                                             feedback.addr, feedback.data_type, feedback.data);
         }
     }, *feedback_opt);
@@ -520,6 +530,85 @@ void MotorDriverImpl::notify_parameter_result_observers(const std::string& inter
             }
         } else {
             it = observers_.erase(it);
+        }
+    }
+}
+
+// ========== 事件总线集成实现 ==========
+void MotorDriverImpl::set_event_bus(std::shared_ptr<event::EventBus> event_bus) {
+    std::lock_guard<std::mutex> lock(event_bus_mutex_);
+    event_bus_ = std::move(event_bus);
+}
+
+std::shared_ptr<event::EventBus> MotorDriverImpl::get_event_bus() const {
+    std::lock_guard<std::mutex> lock(event_bus_mutex_);
+    return event_bus_;
+}
+
+void MotorDriverImpl::emit_motor_status_event(const std::string& interface, uint32_t motor_id, const Motor_Status& status) {
+    std::shared_ptr<event::EventBus> event_bus;
+    {
+        std::lock_guard<std::mutex> lock(event_bus_mutex_);
+        event_bus = event_bus_;
+    }
+    
+    if (event_bus) {
+        try {
+            auto event = std::make_shared<event::MotorStatusEvent>(interface, motor_id, status);
+            event_bus->publish(event);
+        } catch (const std::exception& e) {
+            std::cerr << "Error emitting motor status event: " << e.what() << std::endl;
+        }
+    }
+}
+
+void MotorDriverImpl::emit_motor_batch_status_event(const std::string& interface, const std::map<uint32_t, Motor_Status>& status_all) {
+    std::shared_ptr<event::EventBus> event_bus;
+    {
+        std::lock_guard<std::mutex> lock(event_bus_mutex_);
+        event_bus = event_bus_;
+    }
+    
+    if (event_bus) {
+        try {
+            auto event = std::make_shared<event::MotorBatchStatusEvent>(interface, status_all);
+            event_bus->publish(event);
+        } catch (const std::exception& e) {
+            std::cerr << "Error emitting motor batch status event: " << e.what() << std::endl;
+        }
+    }
+}
+
+void MotorDriverImpl::emit_motor_function_result_event(const std::string& interface, uint32_t motor_id, uint8_t op_code, bool success) {
+    std::shared_ptr<event::EventBus> event_bus;
+    {
+        std::lock_guard<std::mutex> lock(event_bus_mutex_);
+        event_bus = event_bus_;
+    }
+    
+    if (event_bus) {
+        try {
+            auto event = std::make_shared<event::MotorFunctionResultEvent>(interface, motor_id, op_code, success);
+            event_bus->publish(event);
+        } catch (const std::exception& e) {
+            std::cerr << "Error emitting motor function result event: " << e.what() << std::endl;
+        }
+    }
+}
+
+void MotorDriverImpl::emit_motor_parameter_result_event(const std::string& interface, uint32_t motor_id, uint16_t address, uint8_t data_type, const std::any& data) {
+    std::shared_ptr<event::EventBus> event_bus;
+    {
+        std::lock_guard<std::mutex> lock(event_bus_mutex_);
+        event_bus = event_bus_;
+    }
+    
+    if (event_bus) {
+        try {
+            auto event = std::make_shared<event::MotorParameterResultEvent>(interface, motor_id, address, data_type, data);
+            event_bus->publish(event);
+        } catch (const std::exception& e) {
+            std::cerr << "Error emitting motor parameter result event: " << e.what() << std::endl;
         }
     }
 }

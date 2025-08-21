@@ -57,6 +57,31 @@ RobotHardware::RobotHardware(
     }
 }
 
+// 事件总线构造函数
+RobotHardware::RobotHardware(
+    std::shared_ptr<hardware_driver::motor_driver::MotorDriverInterface> motor_driver,
+    const std::map<std::string, std::vector<uint32_t>>& interface_motor_config,
+    std::shared_ptr<hardware_driver::event::EventBus> event_bus)
+    : motor_driver_(std::move(motor_driver)),
+      interface_motor_config_(interface_motor_config),
+      status_callback_(nullptr),
+      batch_status_callback_(nullptr),
+      event_bus_(std::move(event_bus))
+{
+    // 转换为MotorDriverImpl以访问新接口
+    auto motor_driver_impl = std::dynamic_pointer_cast<hardware_driver::motor_driver::MotorDriverImpl>(motor_driver_);
+
+    if (motor_driver_impl) {
+        // 设置事件总线
+        motor_driver_impl->set_event_bus(event_bus_);
+        
+        // 设置电机配置，启动反馈请求
+        motor_driver_impl->set_motor_config(interface_motor_config_);
+        
+        std::cout << "RobotHardware initialized with EventBus - events will be automatically published" << std::endl;
+    }
+}
+
 RobotHardware::~RobotHardware() = default;
 
 // 内部状态聚合方法实现

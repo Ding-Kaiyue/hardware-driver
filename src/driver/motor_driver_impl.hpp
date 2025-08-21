@@ -4,6 +4,8 @@
 #include "hardware_driver/driver/motor_driver_interface.hpp"
 #include "protocol/motor_protocol.hpp"
 #include "hardware_driver/bus/bus_interface.hpp"
+#include "hardware_driver/event/event_bus.hpp"
+#include "hardware_driver/event/motor_events.hpp"
 #include <iostream>
 #include <memory>
 #include <unordered_map>
@@ -90,6 +92,10 @@ public:
                                                const Motor_Status& status)>;
 
     explicit MotorDriverImpl(std::shared_ptr<bus::BusInterface> bus);
+    
+    // 事件总线集成
+    void set_event_bus(std::shared_ptr<event::EventBus> event_bus);
+    std::shared_ptr<event::EventBus> get_event_bus() const;
     ~MotorDriverImpl() override;
 
     void disable_motor(const std::string interface, const uint32_t motor_id) override;
@@ -172,6 +178,16 @@ private:
     void notify_motor_status_observers(const std::string& interface, uint32_t motor_id, const Motor_Status& status);
     void notify_function_result_observers(const std::string& interface, uint32_t motor_id, uint8_t op_code, bool success);
     void notify_parameter_result_observers(const std::string& interface, uint32_t motor_id, uint16_t address, uint8_t data_type, const std::any& data);
+    
+    // 事件总线支持
+    std::shared_ptr<hardware_driver::event::EventBus> event_bus_;
+    mutable std::mutex event_bus_mutex_;
+    
+    // 事件发布方法
+    void emit_motor_status_event(const std::string& interface, uint32_t motor_id, const Motor_Status& status);
+    void emit_motor_batch_status_event(const std::string& interface, const std::map<uint32_t, Motor_Status>& status_all);
+    void emit_motor_function_result_event(const std::string& interface, uint32_t motor_id, uint8_t op_code, bool success);
+    void emit_motor_parameter_result_event(const std::string& interface, uint32_t motor_id, uint16_t address, uint8_t data_type, const std::any& data);
 };
 
 }    // namespace motor_driver
