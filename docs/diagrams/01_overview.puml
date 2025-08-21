@@ -1,0 +1,31 @@
+@startuml Hardware_Driver_Overview
+!theme plain
+title Hardware Driver v2.0.0
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontSize 12
+skinparam direction left to right
+
+rectangle "用户应用\nUser App" as User #FFE4B5
+rectangle "RobotHardware\nAPI接口" as API #E7F3FF
+rectangle "MotorDriverImpl\n核心驱动" as Driver #E7F3FF
+rectangle "CAN总线\nCAN Bus" as Bus #F0FFF0
+rectangle "电机设备\nMotors" as Motors #FFE4E1
+
+User --> API : 控制调用
+API --> Driver : 命令转发
+Driver --> Bus : 总线通信
+Bus --> Motors : 硬件控制
+
+Motors --> Bus : 状态反馈
+Bus --> Driver : 数据接收
+Driver --> API : 状态更新
+API --> User : 结果返回
+
+note bottom of Driver
+四线程架构
+事件总线支持
+200μs控制精度
+end note
+
+@enduml

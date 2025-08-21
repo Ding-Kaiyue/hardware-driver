@@ -1,0 +1,46 @@
+@startuml Event_Dispatch
+!theme plain
+title 事件分发 - 多机制并存 (从上到下)
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontSize 12
+
+rectangle "数据处理线程\nData Processing" as Process #E6F3FF
+
+package "三种分发机制" {
+    rectangle "事件总线\nEventBus" as EventBus #E7F3FF
+    rectangle "观察者模式\nObserver" as Observer #E7F3FF  
+    rectangle "回调函数\nCallback" as Callback #E7F3FF
+}
+
+rectangle "用户监听器1\nUser Listener 1" as User1 #FFE4B5
+rectangle "用户监听器2\nUser Listener 2" as User2 #FFE4B5
+rectangle "用户监听器3\nUser Listener 3" as User3 #FFE4B5
+
+Process --> EventBus : 事件发布
+Process --> Observer : 观察者通知
+Process --> Callback : 回调调用
+
+EventBus --> User1 : 异步通知
+Observer --> User2 : 直接回调
+Callback --> User3 : 函数调用
+
+note right of EventBus
+解耦架构
+主题订阅
+类型安全
+end note
+
+note right of Observer  
+最佳性能
+实时通知
+同步调用
+end note
+
+note right of Callback
+向后兼容
+简单直接
+批量处理
+end note
+
+@enduml

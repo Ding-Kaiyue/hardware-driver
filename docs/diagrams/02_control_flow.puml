@@ -1,0 +1,30 @@
+@startuml Control_Flow
+!theme plain
+title 控制流程 - 从命令到执行
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontSize 12
+skinparam direction left to right
+
+rectangle "用户调用\nUser Call" as User #FFE4B5
+rectangle "API接口\nRobotHardware" as API #E7F3FF
+rectangle "命令队列\nControl Queue" as Queue #FFE4B5
+rectangle "控制线程\nControl Worker" as Thread #E6F3FF
+rectangle "协议编码\nProtocol" as Protocol #F0FFF0
+rectangle "CAN发送\nCAN Send" as CAN #F0FFF0
+rectangle "电机执行\nMotor Execute" as Motor #FFE4E1
+
+User --> API : control_motor()
+API --> Queue : 命令入队
+Queue --> Thread : 200μs处理
+Thread --> Protocol : 协议打包
+Protocol --> CAN : 总线发送
+CAN --> Motor : 硬件控制
+
+note bottom of Thread
+混合时序策略:
+sleep + 忙等待
+保证200μs精度
+end note
+
+@enduml

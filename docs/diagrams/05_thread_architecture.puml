@@ -1,0 +1,48 @@
+@startuml Thread_Architecture
+!theme plain
+title 四线程架构 - 并发协作 (从上到下)
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontSize 12
+
+rectangle "主线程\nMain Thread" as Main #FFE4B5
+
+package "四个工作线程" {
+    rectangle "控制线程\nControl Worker\n200μs精度" as Control #E6F3FF
+    rectangle "数据处理线程\nData Processing\n协议解析" as Process #E6F3FF
+    rectangle "反馈请求线程\nFeedback Request\n智能频率" as Feedback #E6F3FF
+    rectangle "异步接收\nAsync Receive\n非阻塞" as Receive #E6F3FF
+}
+
+rectangle "硬件层\nHardware" as Hardware #FFE4E1
+
+Main --> Control : 控制命令
+Main --> Process : 状态查询
+
+Control --> Hardware : 控制发送
+Hardware --> Receive : 状态反馈
+Receive --> Process : 数据处理
+Process --> Main : 结果返回
+
+Feedback --> Hardware : 反馈请求
+Control --> Feedback : 频率控制
+
+note right of Control
+混合时序策略
+精确200μs间隔
+批量命令处理
+end note
+
+note right of Process
+三路并发分发
+事件总线发布
+观察者通知
+end note
+
+note right of Feedback
+高低频自适应
+有控制时: 2.5kHz
+空闲时: 100Hz
+end note
+
+@enduml

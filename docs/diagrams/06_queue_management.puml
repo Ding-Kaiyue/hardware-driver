@@ -1,0 +1,33 @@
+@startuml Queue_Management
+!theme plain
+title 队列管理与背压控制
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontSize 12
+skinparam direction left to right
+
+rectangle "数据输入\nData Input" as Input #FFE4B5
+rectangle "队列缓冲\nQueue Buffer\n(MAX_SIZE=1000)" as Queue #FFE4B5
+rectangle "背压控制\nBackpressure\nKeep-Latest" as Backpressure #F0FFF0
+rectangle "数据输出\nData Output" as Output #FFE4B5
+
+Input --> Queue : 数据入队
+Queue --> Backpressure : 容量监控
+Queue --> Output : 数据出队
+
+note bottom of Queue
+两个主要队列:
+• 控制队列 (control_queue_)
+• 接收队列 (receive_queue_)
+最大容量: 1000条目
+end note
+
+note bottom of Backpressure
+溢出策略:
+1. 检测队列满
+2. 丢弃最旧数据
+3. 保留最新数据
+4. 防止内存泄漏
+end note
+
+@enduml

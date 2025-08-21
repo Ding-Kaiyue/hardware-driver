@@ -1,0 +1,28 @@
+@startuml Feedback_Flow
+!theme plain
+title 反馈流程 - 从硬件到用户
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontSize 12
+skinparam direction left to right
+
+rectangle "电机反馈\nMotor Feedback" as Motor #FFE4E1
+rectangle "异步接收\nAsync Receive" as Receive #E6F3FF
+rectangle "接收队列\nReceive Queue" as Queue #FFE4B5
+rectangle "数据处理\nData Process" as Process #E6F3FF
+rectangle "状态缓存\nStatus Cache" as Cache #F0FFF0
+rectangle "用户获取\nUser Get" as User #FFE4B5
+
+Motor --> Receive : 状态数据
+Receive --> Queue : 数据入队
+Queue --> Process : 协议解析
+Process --> Cache : 状态更新
+Cache --> User : 实时查询
+
+note bottom of Process
+智能频率切换:
+高频: 2.5kHz (有控制时)
+低频: 100Hz (空闲时)
+end note
+
+@enduml
