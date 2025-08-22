@@ -89,14 +89,27 @@ void MotorDriverImpl::send_control_command(const bus::GenericBusPacket& packet) 
     {
         std::lock_guard<std::mutex> lock(control_mutex_);
         
-        // 检查队列大小，实现背压控制
+        // 性能优化：预分配队列空间，减少重新分配
         if (control_queue_.size() >= MAX_QUEUE_SIZE) {
-            // 队列满时，丢弃最旧的命令，保留最新的命令
-            control_queue_.pop();
-            std::cerr << "Warning: Control queue overflow, dropping oldest command" << std::endl;
+            constexpr size_t DROP_BURST = 32;  // 增加批量丢弃数量
+            size_t to_drop = std::min(DROP_BURST, control_queue_.size());
+            
+            // 批量丢弃，减少循环开销
+            for (size_t i = 0; i < to_drop; ++i) {
+                control_queue_.pop();
+            }
+            
+            // 限频告警，减少日志开销
+            static auto last_warn = std::chrono::steady_clock::now();
+            auto now = std::chrono::steady_clock::now();
+            if (now - last_warn > std::chrono::milliseconds(200)) {  // 增加告警间隔
+                std::cerr << "Warning: Control queue overflow, dropped " << to_drop << " oldest commands" << std::endl;
+                last_warn = now;
+            }
         }
         
-        control_queue_.push(packet);
+        // 使用emplace避免拷贝构造
+        control_queue_.emplace(packet);
     }
     control_cv_.notify_one();  // 唤醒控制线程
 }
