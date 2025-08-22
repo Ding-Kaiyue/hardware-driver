@@ -14,7 +14,7 @@ public:
     void on_motor_status_update(const std::string& interface, 
                                uint32_t motor_id, 
                                const hardware_driver::motor_driver::Motor_Status& status) override {
-        std::cout << "[监控] 电机 " << interface << ":" << motor_id 
+        std::cout << "[状态] 电机 " << interface << ":" << motor_id 
                   << " | 位置:" << status.position 
                   << " | 速度:" << status.velocity
                   << " | 力矩:" << status.effort 
@@ -64,7 +64,7 @@ int main() {
         auto observer = std::make_shared<ZeroPositionObserver>();
         motor_driver->add_observer(observer);
         
-        // 创建硬件接口 - 使用观察者模式
+        // 创建硬件接口 - 和观察者示例保持一致
         RobotHardware robot(motor_driver, motor_config);
         
         std::cout << "硬件初始化完成" << std::endl;

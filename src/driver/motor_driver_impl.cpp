@@ -86,40 +86,14 @@ void MotorDriverImpl::set_motor_config(const std::map<std::string, std::vector<u
 }
 
 void MotorDriverImpl::send_control_command(const bus::GenericBusPacket& packet) {
+    // 无界队列：直接推入，保证每条命令都能发送
     {
         std::lock_guard<std::mutex> lock(control_mutex_);
-        
-        // 性能优化：预分配队列空间，减少重新分配
-        if (control_queue_.size() >= MAX_QUEUE_SIZE) {
-            constexpr size_t DROP_BURST = 32;  // 增加批量丢弃数量
-            size_t to_drop = std::min(DROP_BURST, control_queue_.size());
-            
-            // 批量丢弃，减少循环开销
-            for (size_t i = 0; i < to_drop; ++i) {
-                control_queue_.pop();
-            }
-            
-            // 限频告警，减少日志开销
-            static auto last_warn = std::chrono::steady_clock::now();
-            auto now = std::chrono::steady_clock::now();
-            if (now - last_warn > std::chrono::milliseconds(200)) {  // 增加告警间隔
-                std::cerr << "Warning: Control queue overflow, dropped " << to_drop << " oldest commands" << std::endl;
-                last_warn = now;
-            }
-        }
-        
-        // 使用emplace避免拷贝构造
-        control_queue_.emplace(packet);
+        control_queue_.push(packet);
     }
-    control_cv_.notify_one();  // 唤醒控制线程
-}
-
-void MotorDriverImpl::send_other_command(const bus::GenericBusPacket& packet) {
-    try {
-        bus_->send(packet);
-    } catch (const std::exception& e) {
-        std::cerr << "Error sending other command: " << e.what() << std::endl;
-    }
+    
+    // 唤醒控制线程
+    control_cv_.notify_one();
 }
 
 void MotorDriverImpl::disable_motor(const std::string interface, const uint32_t motor_id) {
@@ -128,7 +102,8 @@ void MotorDriverImpl::disable_motor(const std::string interface, const uint32_t 
     packet.id = motor_id;  // 与其他控制命令保持一致
     
     if (motor_protocol::pack_disable_command(packet.data, packet.len)) {
-        send_control_command(packet);  // 安全命令使用控制线程
+        // 所有命令统一按时间顺序发送
+        send_control_command(packet);
     }
 }
 
@@ -138,7 +113,8 @@ void MotorDriverImpl::enable_motor(const std::string interface, const uint32_t m
     packet.id = motor_id;
     
     if (motor_protocol::pack_enable_command(packet.data, packet.len, mode)) {
-        send_control_command(packet);  // 安全命令使用控制线程
+        // 所有命令统一按时间顺序发送  
+        send_control_command(packet);
     }
 }
 
@@ -188,7 +164,7 @@ void MotorDriverImpl::motor_parameter_read(const std::string interface, const ui
     packet.id = motor_id + 0x600;
     
     if (motor_protocol::pack_param_read(packet.data, packet.len, address)) {
-        send_other_command(packet);
+        send_control_command(packet);
     }
 }
 
@@ -198,7 +174,7 @@ void MotorDriverImpl::motor_parameter_write(const std::string interface, const u
     packet.id = motor_id + 0x600;
     
     if (motor_protocol::pack_param_write(packet.data, packet.len, address, value)) {
-        send_other_command(packet);
+        send_control_command(packet);
     }
 }
 
@@ -208,7 +184,7 @@ void MotorDriverImpl::motor_parameter_write(const std::string interface, const u
     packet.id = motor_id + 0x600;
     
     if (motor_protocol::pack_param_write(packet.data, packet.len, address, value)) {
-        send_other_command(packet);
+        send_control_command(packet);
     }
 }
 
@@ -218,7 +194,7 @@ void MotorDriverImpl::motor_function_operation(const std::string interface, cons
     packet.id = motor_id + 0x400;
     
     if (motor_protocol::pack_function_operation(packet.data, packet.len, operation)) {
-        send_other_command(packet);
+        send_control_command(packet);
     }
 }
 
@@ -243,7 +219,7 @@ void MotorDriverImpl::control_worker() {
         while (!control_queue_.empty()) {
             auto packet = control_queue_.front();
             control_queue_.pop();
-            lock.unlock();
+            lock.unlock();  // 释放锁进行发送
             
             try {
                 // 混合时序控制：粗粒度sleep + 精确忙等待
@@ -278,7 +254,7 @@ void MotorDriverImpl::control_worker() {
                 next_send_time += timing_config_.control_interval;
             }
             
-            lock.lock();
+            lock.lock();  // 重新获取锁检查队列
         }
     }
 }
