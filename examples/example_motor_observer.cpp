@@ -58,8 +58,12 @@ int main() {
         
         // 正向旋转
         std::cout << "正向旋转 5 度/秒..." << std::endl;
-        robot.control_motor_in_velocity_mode("can0", test_motor1, 5.0);
-        robot.control_motor_in_velocity_mode("can0", test_motor2, 5.0);
+        for (int i = 0; i < 200000; i++) {
+            robot.control_motor_in_velocity_mode("can0", test_motor1, 5.0);
+            robot.control_motor_in_velocity_mode("can0", test_motor2, 5.0);
+        }
+        // robot.control_motor_in_velocity_mode("can0", test_motor1, 5.0);
+        // robot.control_motor_in_velocity_mode("can0", test_motor2, 5.0);
         std::this_thread::sleep_for(std::chrono::seconds(3));
         
         // 停止

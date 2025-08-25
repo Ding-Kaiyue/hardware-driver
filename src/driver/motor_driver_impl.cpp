@@ -85,21 +85,79 @@ void MotorDriverImpl::set_motor_config(const std::map<std::string, std::vector<u
     }
 }
 
-void MotorDriverImpl::send_control_command(const bus::GenericBusPacket& packet) {
-    // 有界阻塞队列：确保不丢失任何控制命令，提供背压保护
+bool MotorDriverImpl::send_control_command_timeout(const bus::GenericBusPacket& packet, std::chrono::milliseconds timeout) {
+    // 有界队列：带超时的安全版本，避免程序永久阻塞
     {
         std::unique_lock<std::mutex> lock(control_mutex_);
         
-        // 阻塞等待直到队列有空间（安全第一，绝不丢包）
-        control_cv_.wait(lock, [this] { 
-            return control_queue_.size() < MAX_QUEUE_SIZE; 
-        });
+        // 超时等待直到队列有空间
+        if (!control_cv_.wait_for(lock, timeout, [this] { 
+            return control_priority_queue_.size() < MAX_QUEUE_SIZE; 
+        })) {
+            // 超时警告但不阻塞程序
+            std::cerr << "Warning: Control queue full (size: " << control_priority_queue_.size() 
+                      << "), command may be delayed or dropped" << std::endl;
+            return false;   // 返回值表示是否成功加入队列
+        }
         
-        control_queue_.push(packet);
+        // 使用默认优先级
+        control_priority_queue_.emplace(packet, CommandPriority::LOW);
     }
     
     // 唤醒控制线程
     control_cv_.notify_one();
+    return true;
+}
+
+void MotorDriverImpl::send_control_command(const bus::GenericBusPacket& packet) {
+    // 默认使用低优先级（普通控制命令）
+    send_control_command(packet, CommandPriority::LOW);
+}
+
+void MotorDriverImpl::send_control_command(const bus::GenericBusPacket& packet, CommandPriority priority) {
+    // 重复命令过滤：避免队列被相同命令填满
+    if (is_duplicate_command(packet)) {
+        // 跳过重复命令，但不报错
+        return;
+    }
+    
+    // 优先级队列：高优先级命令会优先处理
+    {
+        std::unique_lock<std::mutex> lock(control_mutex_);
+        
+        // 队列满时警告，但依然等待（确保不丢包）
+        if (control_priority_queue_.size() >= MAX_QUEUE_SIZE * 0.8) {  // 80%时开始警告
+            std::cerr << "Warning: Control queue is " << (control_priority_queue_.size() * 100 / MAX_QUEUE_SIZE) 
+                      << "% full (" << control_priority_queue_.size() << "/" << MAX_QUEUE_SIZE << ")" << std::endl;
+        }
+        
+        // 阻塞等待，绝不丢包
+        control_cv_.wait(lock, [this] { 
+            return control_priority_queue_.size() < MAX_QUEUE_SIZE; 
+        });
+        
+        // 创建优先级命令并加入队列
+        control_priority_queue_.emplace(packet, priority);
+    }
+    
+    // 唤醒控制线程
+    control_cv_.notify_one();
+}
+
+void MotorDriverImpl::send_emergency_stop(const std::string& interface, uint32_t motor_id) {
+    bus::GenericBusPacket packet;
+    packet.interface = interface;
+    packet.id = motor_id;
+    
+    // 创建紧急停止命令（速度设为0）
+    if (motor_protocol::pack_velocity_command(packet.data, packet.len, 0.0f)) {
+        // 使用最高优先级
+        send_control_command(packet, CommandPriority::EMERGENCY);
+        
+        std::cout << "Emergency stop sent for motor " << interface << ":" << motor_id << std::endl;
+    } else {
+        std::cerr << "Failed to create emergency stop command for motor " << interface << ":" << motor_id << std::endl;
+    }
 }
 
 void MotorDriverImpl::disable_motor(const std::string interface, const uint32_t motor_id) {
@@ -108,8 +166,8 @@ void MotorDriverImpl::disable_motor(const std::string interface, const uint32_t 
     packet.id = motor_id;  // 与其他控制命令保持一致
     
     if (motor_protocol::pack_disable_command(packet.data, packet.len)) {
-        // 所有命令统一按时间顺序发送
-        send_control_command(packet);
+        // 失能命令使用高优先级
+        send_control_command(packet, CommandPriority::HIGH);
     }
 }
 
@@ -119,8 +177,8 @@ void MotorDriverImpl::enable_motor(const std::string interface, const uint32_t m
     packet.id = motor_id;
     
     if (motor_protocol::pack_enable_command(packet.data, packet.len, mode)) {
-        // 所有命令统一按时间顺序发送  
-        send_control_command(packet);
+        // 使能命令使用高优先级
+        send_control_command(packet, CommandPriority::HIGH);
     }
 }
 
@@ -214,7 +272,7 @@ void MotorDriverImpl::control_worker() {
         
         // 等待控制命令，没有命令时阻塞
         control_cv_.wait(lock, [this] { 
-            return !running_ || !control_queue_.empty(); 
+            return !running_ || !control_priority_queue_.empty(); 
         });
         
         if (!running_) break;
@@ -222,9 +280,11 @@ void MotorDriverImpl::control_worker() {
         // 批量处理控制命令，保证200us间隔
         auto next_send_time = std::chrono::steady_clock::now();
         
-        while (!control_queue_.empty()) {
-            auto packet = control_queue_.front();
-            control_queue_.pop();
+        while (!control_priority_queue_.empty()) {
+            // 取出最高优先级的命令
+            auto priority_cmd = control_priority_queue_.top();
+            control_priority_queue_.pop();
+            auto packet = priority_cmd.packet;
             lock.unlock();  // 释放锁进行发送
             
             try {
@@ -609,6 +669,32 @@ void MotorDriverImpl::emit_motor_parameter_result_event(const std::string& inter
             std::cerr << "Error emitting motor parameter result event: " << e.what() << std::endl;
         }
     }
+}
+
+bool MotorDriverImpl::is_duplicate_command(const bus::GenericBusPacket& packet) {
+    Motor_Key key{packet.interface, packet.id};
+    
+    std::lock_guard<std::mutex> lock(last_commands_mutex_);
+    
+    // 查找该电机的最后一条命令
+    auto it = last_commands_.find(key);
+    if (it == last_commands_.end()) {
+        // 首次命令，不是重复
+        last_commands_[key] = packet;
+        return false;
+    }
+    
+    // 比较命令内容是否相同
+    const auto& last_packet = it->second;
+    bool is_duplicate = (packet.len == last_packet.len) && 
+                       (std::memcmp(packet.data.data(), last_packet.data.data(), packet.len) == 0);
+    
+    if (!is_duplicate) {
+        // 更新最后命令
+        last_commands_[key] = packet;
+    }
+    
+    return is_duplicate;
 }
 
 }   // namespace motor_driver

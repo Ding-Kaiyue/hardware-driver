@@ -46,6 +46,34 @@ struct hash<Motor_Key> {
 namespace hardware_driver {
 namespace motor_driver {
 
+// 命令优先级枚举
+enum class CommandPriority : uint8_t {
+    LOW = 0,        // 低优先级：普通控制命令（速度、位置等）
+    NORMAL = 1,     // 正常优先级：参数读写
+    HIGH = 2,       // 高优先级：使能/失能命令
+    EMERGENCY = 3   // 紧急优先级：紧急停止、故障清除
+};
+
+// 带优先级的控制命令包装
+struct PriorityCommand {
+    bus::GenericBusPacket packet;
+    CommandPriority priority;
+    std::chrono::steady_clock::time_point timestamp;
+    
+    PriorityCommand(const bus::GenericBusPacket& pkt, CommandPriority prio = CommandPriority::NORMAL) 
+        : packet(pkt), priority(prio), timestamp(std::chrono::steady_clock::now()) {}
+};
+
+// 优先级比较器：优先级高的先执行，同优先级按时间排序
+struct PriorityComparator {
+    bool operator()(const PriorityCommand& a, const PriorityCommand& b) const {
+        if (a.priority != b.priority) {
+            return static_cast<uint8_t>(a.priority) < static_cast<uint8_t>(b.priority);  // 优先级高的在前
+        }
+        return a.timestamp > b.timestamp;  // 同优先级按时间排序，早的在前
+    }
+};
+
 // 电机状态观察者接口
 class MotorStatusObserver {
 public:
@@ -115,6 +143,11 @@ public:
     // 新增公共接口
     void register_feedback_callback(FeedbackCallback callback);
     void send_control_command(const bus::GenericBusPacket& packet);
+    void send_control_command(const bus::GenericBusPacket& packet, CommandPriority priority);
+    bool send_control_command_timeout(const bus::GenericBusPacket& packet, std::chrono::milliseconds timeout = std::chrono::milliseconds(10));
+    
+    // 便捷的紧急停止接口
+    void send_emergency_stop(const std::string& interface, uint32_t motor_id);
 
     // 设置要监控的电机配置（用于反馈请求）
     void set_motor_config(const std::map<std::string, std::vector<uint32_t>>& config);
@@ -134,10 +167,14 @@ private:
     std::vector<std::weak_ptr<MotorStatusObserver>> observers_;
     std::mutex observers_mutex_;  // 保护观察者列表
 
-    // 控制命令无界队列和同步
-    std::queue<bus::GenericBusPacket> control_queue_;
+    // 控制命令优先级队列和同步
+    std::priority_queue<PriorityCommand, std::vector<PriorityCommand>, PriorityComparator> control_priority_queue_;
     std::mutex control_mutex_;
     std::condition_variable control_cv_;
+    
+    // 重复命令过滤机制
+    std::unordered_map<Motor_Key, bus::GenericBusPacket> last_commands_;  // 存储每个电机的最后一条命令
+    mutable std::mutex last_commands_mutex_;  // 保护最后命令映射
     
     // 接收数据队列和同步
     std::queue<bus::GenericBusPacket> receive_queue_;
@@ -179,6 +216,9 @@ private:
     void notify_motor_status_observers(const std::string& interface, uint32_t motor_id, const Motor_Status& status);
     void notify_function_result_observers(const std::string& interface, uint32_t motor_id, uint8_t op_code, bool success);
     void notify_parameter_result_observers(const std::string& interface, uint32_t motor_id, uint16_t address, uint8_t data_type, const std::any& data);
+    
+    // 重复命令检测
+    bool is_duplicate_command(const bus::GenericBusPacket& packet);
     
     // 事件总线支持
     std::shared_ptr<hardware_driver::event::EventBus> event_bus_;
