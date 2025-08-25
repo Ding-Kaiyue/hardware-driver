@@ -135,9 +135,9 @@ int main() {
         std::cout << "\n步骤2: 控制电机运动" << std::endl;
         
         // 正向旋转
-        std::cout << "正向旋转 5 度/秒..." << std::endl;
-        robot.control_motor_in_velocity_mode("can0", test_motor1, 5.0);
-        robot.control_motor_in_velocity_mode("can0", test_motor2, 5.0);
+        std::cout << "正向旋转 50 度/秒..." << std::endl;
+        robot.control_motor_in_velocity_mode("can0", test_motor1, 50.0);
+        robot.control_motor_in_velocity_mode("can0", test_motor2, 50.0);
         std::this_thread::sleep_for(std::chrono::seconds(3));
         
         // 停止
@@ -147,9 +147,9 @@ int main() {
         std::this_thread::sleep_for(std::chrono::seconds(1));
         
         // 反向旋转
-        std::cout << "反向旋转 -3 度/秒..." << std::endl;
-        robot.control_motor_in_velocity_mode("can0", test_motor1, -3.0);
-        robot.control_motor_in_velocity_mode("can0", test_motor2, -3.0);
+        std::cout << "反向旋转 -30 度/秒..." << std::endl;
+        robot.control_motor_in_velocity_mode("can0", test_motor1, -30.0);
+        robot.control_motor_in_velocity_mode("can0", test_motor2, -30.0);
         std::this_thread::sleep_for(std::chrono::seconds(2));
         
         // 停止
