@@ -281,10 +281,11 @@ void MotorDriverImpl::control_worker() {
         auto next_send_time = std::chrono::steady_clock::now();
         
         while (!control_priority_queue_.empty()) {
-            // 取出最高优先级的命令
+            // 每次都取最高优先级的命令（确保抢占式调度）
             auto priority_cmd = control_priority_queue_.top();
             control_priority_queue_.pop();
             auto packet = priority_cmd.packet;
+            
             lock.unlock();  // 释放锁进行发送
             
             try {
