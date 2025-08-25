@@ -165,6 +165,7 @@ make test
 ### CAN接口配置
 ```bash
 # 配置CAN接口
+sudo ip link set can0 txqueuelen 1000
 sudo ip link set can0 up type can bitrate 1000000 sample-point 0.8 dbitrate 5000000 dsample-point 0.75 fd on
 
 # 检查状态
