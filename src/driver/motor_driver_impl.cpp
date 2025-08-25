@@ -86,9 +86,15 @@ void MotorDriverImpl::set_motor_config(const std::map<std::string, std::vector<u
 }
 
 void MotorDriverImpl::send_control_command(const bus::GenericBusPacket& packet) {
-    // 无界队列：直接推入，保证每条命令都能发送
+    // 有界阻塞队列：确保不丢失任何控制命令，提供背压保护
     {
-        std::lock_guard<std::mutex> lock(control_mutex_);
+        std::unique_lock<std::mutex> lock(control_mutex_);
+        
+        // 阻塞等待直到队列有空间（安全第一，绝不丢包）
+        control_cv_.wait(lock, [this] { 
+            return control_queue_.size() < MAX_QUEUE_SIZE; 
+        });
+        
         control_queue_.push(packet);
     }
     
@@ -255,6 +261,9 @@ void MotorDriverImpl::control_worker() {
             }
             
             lock.lock();  // 重新获取锁检查队列
+            
+            // 处理完当前批次后，通知等待的生产者线程（用于有界队列的背压控制）
+            control_cv_.notify_all();
         }
     }
 }

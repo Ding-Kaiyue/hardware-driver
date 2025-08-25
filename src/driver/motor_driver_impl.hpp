@@ -42,67 +42,6 @@ struct hash<Motor_Key> {
 };
 }
 
-// MPSC环形缓冲区 - 多生产者单消费者
-template<typename T, size_t N>
-class MPSCRingBuffer {
-private:
-    std::array<T, N> buffer_;
-    std::atomic<size_t> write_pos_{0};
-    std::atomic<size_t> read_pos_{0};
-    mutable std::mutex write_mutex_;  // 只保护写操作
-    
-public:
-    bool try_push(const T& item) {
-        std::lock_guard<std::mutex> lock(write_mutex_);
-        const size_t current_write = write_pos_.load(std::memory_order_relaxed);
-        const size_t next_write = (current_write + 1) % N;
-        
-        if (next_write == read_pos_.load(std::memory_order_acquire)) {
-            return false;  // 队列满
-        }
-        
-        buffer_[current_write] = item;
-        write_pos_.store(next_write, std::memory_order_release);
-        return true;
-    }
-    
-    void force_push(const T& item) {
-        std::lock_guard<std::mutex> lock(write_mutex_);
-        const size_t current_write = write_pos_.load(std::memory_order_relaxed);
-        const size_t next_write = (current_write + 1) % N;
-        
-        // 如果队列满，强制推进读指针，丢弃最旧数据
-        if (next_write == read_pos_.load(std::memory_order_acquire)) {
-            read_pos_.store((read_pos_.load(std::memory_order_relaxed) + 1) % N, 
-                           std::memory_order_release);
-        }
-        
-        buffer_[current_write] = item;
-        write_pos_.store(next_write, std::memory_order_release);
-    }
-    
-    bool try_pop(T& item) {  // 消费者无锁
-        const size_t current_read = read_pos_.load(std::memory_order_relaxed);
-        if (current_read == write_pos_.load(std::memory_order_acquire)) {
-            return false;  // 队列空
-        }
-        
-        item = std::move(buffer_[current_read]);
-        read_pos_.store((current_read + 1) % N, std::memory_order_release);
-        return true;
-    }
-    
-    size_t size() const {
-        const size_t write = write_pos_.load(std::memory_order_acquire);
-        const size_t read = read_pos_.load(std::memory_order_acquire);
-        return (write >= read) ? (write - read) : (N - read + write);
-    }
-    
-    bool empty() const {
-        return read_pos_.load(std::memory_order_acquire) == 
-               write_pos_.load(std::memory_order_acquire);
-    }
-};
 
 namespace hardware_driver {
 namespace motor_driver {
