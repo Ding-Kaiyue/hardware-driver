@@ -1,5 +1,7 @@
 #include "hardware_driver/interface/robot_hardware.hpp"
-#include "driver/motor_driver_impl.hpp" 
+#include "hardware_driver/event/motor_events.hpp"
+#include "driver/motor_driver_impl.hpp"
+#include "bus/canfd_bus_impl.hpp"
 #include <chrono>
 #include <thread>
 #include <cstring>
@@ -14,7 +16,12 @@ RobotHardware::RobotHardware(
     : motor_driver_(std::move(motor_driver)),
       interface_motor_config_(interface_motor_config),
       status_callback_(callback),
-      batch_status_callback_(nullptr)
+      batch_status_callback_(nullptr),
+      event_bus_(nullptr),
+      current_observer_(nullptr),
+      current_event_handler_(nullptr),
+      monitoring_paused_(false),
+      event_subscriptions_()
 {
     // 转换为MotorDriverImpl以访问新接口
     auto motor_driver_impl = std::dynamic_pointer_cast<hardware_driver::motor_driver::MotorDriverImpl>(motor_driver_);
@@ -38,7 +45,12 @@ RobotHardware::RobotHardware(
     : motor_driver_(std::move(motor_driver)),
       interface_motor_config_(interface_motor_config),
       status_callback_(nullptr),
-      batch_status_callback_(batch_callback)
+      batch_status_callback_(batch_callback),
+      event_bus_(nullptr),
+      current_observer_(nullptr),
+      current_event_handler_(nullptr),
+      monitoring_paused_(false),
+      event_subscriptions_()
 {
     // 转换为MotorDriverImpl以访问新接口
     auto motor_driver_impl = std::dynamic_pointer_cast<hardware_driver::motor_driver::MotorDriverImpl>(motor_driver_);
@@ -57,28 +69,128 @@ RobotHardware::RobotHardware(
     }
 }
 
-// 事件总线构造函数
+// 观察者构造函数
 RobotHardware::RobotHardware(
     std::shared_ptr<hardware_driver::motor_driver::MotorDriverInterface> motor_driver,
     const std::map<std::string, std::vector<uint32_t>>& interface_motor_config,
-    std::shared_ptr<hardware_driver::event::EventBus> event_bus)
+    std::shared_ptr<hardware_driver::motor_driver::MotorStatusObserver> observer)
     : motor_driver_(std::move(motor_driver)),
       interface_motor_config_(interface_motor_config),
       status_callback_(nullptr),
       batch_status_callback_(nullptr),
-      event_bus_(std::move(event_bus))
+      event_bus_(nullptr),
+      current_observer_(observer),
+      current_event_handler_(nullptr),
+      monitoring_paused_(false),
+      event_subscriptions_()
 {
-    // 转换为MotorDriverImpl以访问新接口
+    // 转换为MotorDriverImpl以访问观察者接口
     auto motor_driver_impl = std::dynamic_pointer_cast<hardware_driver::motor_driver::MotorDriverImpl>(motor_driver_);
 
-    if (motor_driver_impl) {
-        // 设置事件总线
-        motor_driver_impl->set_event_bus(event_bus_);
+    if (motor_driver_impl && current_observer_) {
+        // 添加观察者
+        motor_driver_impl->add_observer(current_observer_);
         
         // 设置电机配置，启动反馈请求
         motor_driver_impl->set_motor_config(interface_motor_config_);
         
-        std::cout << "RobotHardware initialized with EventBus - events will be automatically published" << std::endl;
+        std::cout << "RobotHardware initialized with Observer - status updates will be handled by observer" << std::endl;
+    }
+}
+
+// 事件总线构造函数（带事件处理器）
+RobotHardware::RobotHardware(
+    std::shared_ptr<hardware_driver::motor_driver::MotorDriverInterface> motor_driver,
+    const std::map<std::string, std::vector<uint32_t>>& interface_motor_config,
+    std::shared_ptr<hardware_driver::event::EventBus> event_bus,
+    std::shared_ptr<hardware_driver::motor_driver::MotorEventHandler> event_handler)
+    : motor_driver_(std::move(motor_driver)),
+      interface_motor_config_(interface_motor_config),
+      status_callback_(nullptr),
+      batch_status_callback_(nullptr),
+      event_bus_(std::move(event_bus)),
+      current_observer_(nullptr),
+      current_event_handler_(event_handler),
+      monitoring_paused_(false),
+      event_subscriptions_()
+{
+    // 转换为MotorDriverImpl以访问新接口
+    auto motor_driver_impl = std::dynamic_pointer_cast<hardware_driver::motor_driver::MotorDriverImpl>(motor_driver_);
+
+    if (motor_driver_impl && event_bus_ && current_event_handler_) {
+        // 设置事件总线
+        motor_driver_impl->set_event_bus(event_bus_);
+        
+        // 订阅电机状态事件，转发给事件处理器
+        event_subscriptions_.push_back(
+            event_bus_->subscribe<hardware_driver::event::MotorStatusEvent>(
+            [this](const std::shared_ptr<hardware_driver::event::MotorStatusEvent>& event) {
+                if (current_event_handler_ && !monitoring_paused_) {
+                    current_event_handler_->on_motor_status_update(
+                        event->get_interface(), 
+                        event->get_motor_id(), 
+                        event->get_status()
+                    );
+                }
+                // else {
+                //     std::cout << "DEBUG: 事件处理器为空或已暂停 - handler:" << (current_event_handler_ ? "有效" : "空") 
+                //               << ", paused:" << monitoring_paused_ << std::endl;
+                // }
+            }
+            )
+        );
+        
+        // 订阅批量电机状态事件
+        event_subscriptions_.push_back(
+            event_bus_->subscribe<hardware_driver::event::MotorBatchStatusEvent>(
+            [this](const std::shared_ptr<hardware_driver::event::MotorBatchStatusEvent>& event) {
+                if (current_event_handler_ && !monitoring_paused_) {
+                    current_event_handler_->on_motor_status_update(
+                        event->get_interface(), 
+                        event->get_status_all()
+                    );
+                }
+            }
+            )
+        );
+        
+        // 订阅函数操作结果事件
+        event_subscriptions_.push_back(
+            event_bus_->subscribe<hardware_driver::event::MotorFunctionResultEvent>(
+            [this](const std::shared_ptr<hardware_driver::event::MotorFunctionResultEvent>& event) {
+                if (current_event_handler_ && !monitoring_paused_) {
+                    current_event_handler_->on_motor_function_result(
+                        event->get_interface(), 
+                        event->get_motor_id(), 
+                        event->get_operation_code(), 
+                        event->is_success()
+                    );
+                }
+            }
+            )
+        );
+        
+        // 订阅参数操作结果事件
+        event_subscriptions_.push_back(
+            event_bus_->subscribe<hardware_driver::event::MotorParameterResultEvent>(
+            [this](const std::shared_ptr<hardware_driver::event::MotorParameterResultEvent>& event) {
+                if (current_event_handler_ && !monitoring_paused_) {
+                    current_event_handler_->on_motor_parameter_result(
+                        event->get_interface(), 
+                        event->get_motor_id(), 
+                        event->get_address(), 
+                        event->get_data_type(), 
+                        event->get_data()
+                    );
+                }
+            }
+            )
+        );
+        
+        // 设置电机配置，启动反馈请求
+        motor_driver_impl->set_motor_config(interface_motor_config_);
+        
+        std::cout << "RobotHardware initialized with EventBus and EventHandler" << std::endl;
     }
 }
 
@@ -290,5 +402,67 @@ void RobotHardware::arm_zero_position_set(const std::string& interface, const st
        std::this_thread::sleep_for(std::chrono::milliseconds(100));
        motor_driver_->motor_function_operation(interface, motor_ids.at(i), 2);
        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+}
+
+// ========== 状态监控控制方法 ==========
+void RobotHardware::pause_status_monitoring() {
+    // 转换为MotorDriverImpl以访问内部方法
+    auto motor_driver_impl = std::dynamic_pointer_cast<hardware_driver::motor_driver::MotorDriverImpl>(motor_driver_);
+    
+    if (motor_driver_impl) {
+        if (current_observer_) {
+            // 观察者模式：移除观察者
+            motor_driver_impl->remove_observer(current_observer_);
+            monitoring_paused_ = true;
+        } else if (status_callback_ || batch_status_callback_) {
+            // 回调函数模式：注册空回调函数
+            motor_driver_impl->register_feedback_callback(nullptr);
+            monitoring_paused_ = true;
+        } else if (current_event_handler_) {
+            // 事件总线模式：暂停事件处理（通过标记实现）
+            monitoring_paused_ = true;
+        }
+    }
+}
+
+void RobotHardware::resume_status_monitoring() {
+    // 转换为MotorDriverImpl以访问内部方法
+    auto motor_driver_impl = std::dynamic_pointer_cast<hardware_driver::motor_driver::MotorDriverImpl>(motor_driver_);
+    
+    if (motor_driver_impl && monitoring_paused_) {
+        if (current_observer_) {
+            // 观察者模式：重新添加观察者
+            motor_driver_impl->add_observer(current_observer_);
+            monitoring_paused_ = false;
+        } else if (status_callback_) {
+            // 单个状态回调模式：重新注册原回调函数
+            motor_driver_impl->register_feedback_callback(status_callback_);
+            monitoring_paused_ = false;
+        } else if (batch_status_callback_) {
+            // 批量状态回调模式：重新注册内部聚合回调
+            motor_driver_impl->register_feedback_callback(
+                [this](const std::string& interface, uint32_t motor_id, 
+                       const hardware_driver::motor_driver::Motor_Status& status) {
+                    this->handle_motor_status_with_aggregation(interface, motor_id, status);
+                }
+            );
+            monitoring_paused_ = false;
+        } else if (current_event_handler_) {
+            // 事件总线模式：恢复事件处理
+            monitoring_paused_ = false;
+        }
+    }
+}
+
+// ========== 工厂函数实现 ==========
+namespace hardware_driver {
+    std::shared_ptr<motor_driver::MotorDriverInterface> createCanFdMotorDriver(
+        const std::vector<std::string>& interfaces) {
+        // 创建CANFD总线
+        auto bus = std::make_shared<hardware_driver::bus::CanFdBus>(interfaces);
+        
+        // 创建电机驱动实例
+        return std::make_shared<hardware_driver::motor_driver::MotorDriverImpl>(bus);
     }
 }

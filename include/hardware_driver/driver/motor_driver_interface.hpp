@@ -3,6 +3,8 @@
 
 #include <string>
 #include <vector>
+#include <map>
+#include <any>
 
 namespace hardware_driver {
 namespace motor_driver {
@@ -22,6 +24,62 @@ typedef struct {
 
     uint32_t error_code;
 } Motor_Status;
+
+// 电机状态观察者接口
+class MotorStatusObserver {
+public:
+    virtual ~MotorStatusObserver() = default;
+    
+    // 单个电机状态更新事件
+    virtual void on_motor_status_update(const std::string& /*interface*/, 
+                                       uint32_t /*motor_id*/, 
+                                       const Motor_Status& /*status*/) = 0;
+    
+    // 批量电机状态更新事件 - 一个接口的所有电机状态
+    virtual void on_motor_status_update(const std::string& /*interface*/,
+                                       const std::map<uint32_t, Motor_Status>& /*status_all*/) {}
+    
+    // 函数操作结果事件
+    virtual void on_motor_function_result(const std::string& /*interface*/,
+                                         uint32_t /*motor_id*/,
+                                         uint8_t /*op_code*/,
+                                         bool /*success*/) {}
+    
+    // 参数读写结果事件
+    virtual void on_motor_parameter_result(const std::string& /*interface*/,
+                                          uint32_t /*motor_id*/,
+                                          uint16_t /*address*/,
+                                          uint8_t /*data_type*/,
+                                          const std::any& /*data*/) {}
+};
+
+// 事件总线模式的事件处理器接口 - 与观察者模式保持相同的虚函数签名
+class MotorEventHandler {
+public:
+    virtual ~MotorEventHandler() = default;
+    
+    // 单个电机状态更新事件
+    virtual void on_motor_status_update(const std::string& /*interface*/, 
+                                       uint32_t /*motor_id*/, 
+                                       const Motor_Status& /*status*/) = 0;
+    
+    // 批量电机状态更新事件 - 一个接口的所有电机状态
+    virtual void on_motor_status_update(const std::string& /*interface*/,
+                                       const std::map<uint32_t, Motor_Status>& /*status_all*/) {}
+    
+    // 函数操作结果事件
+    virtual void on_motor_function_result(const std::string& /*interface*/,
+                                         uint32_t /*motor_id*/,
+                                         uint8_t /*op_code*/,
+                                         bool /*success*/) {}
+    
+    // 参数读写结果事件
+    virtual void on_motor_parameter_result(const std::string& /*interface*/,
+                                          uint32_t /*motor_id*/,
+                                          uint16_t /*address*/,
+                                          uint8_t /*data_type*/,
+                                          const std::any& /*data*/) {}
+};
 
 
 class MotorDriverInterface {

@@ -40,6 +40,26 @@ sudo dpkg -i libhardware-driver-dev_2.0.0-1_amd64.deb
 sudo apt-get install -f
 ```
 
+## 📦 卸载
+```bash
+# 删除头文件
+  sudo rm -rf /usr/local/include/hardware_driver
+
+  # 删除库文件
+  sudo rm -f /usr/local/lib/libhardware_driver*
+  sudo rm -f /usr/local/lib64/libhardware_driver*
+
+  # 删除CMake配置文件
+  sudo rm -rf /usr/local/lib/cmake/hardware_driver
+  sudo rm -rf /usr/local/share/hardware_driver
+
+  # 删除可执行文件（如果有的话）
+  sudo rm -f /usr/local/bin/*hardware_driver*
+
+  # 更新动态链接库缓存
+  sudo ldconfig
+```
+
 ## 🚀 快速开始
 
 ### 基本使用

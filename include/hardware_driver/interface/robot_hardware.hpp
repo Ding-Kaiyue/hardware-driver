@@ -15,9 +15,27 @@
 
 #include <chrono>
 #include "hardware_driver/driver/motor_driver_interface.hpp"
-#include "driver/motor_driver_impl.hpp"
-#include "bus/canfd_bus_impl.hpp"
 #include "hardware_driver/event/event_bus.hpp"
+
+// 前向声明，避免在头文件中包含实现类
+namespace hardware_driver {
+    namespace event {
+        class MotorStatusEvent;
+    }
+    namespace motor_driver {
+        class MotorDriverImpl;
+    }
+    namespace bus {
+        class CanFdBus;
+    }
+}
+
+// 工厂函数声明 - 用于创建具体的驱动实例
+namespace hardware_driver {
+    // 创建CANFD电机驱动实例
+    std::shared_ptr<motor_driver::MotorDriverInterface> createCanFdMotorDriver(
+        const std::vector<std::string>& interfaces);
+}
 
 // ========== 轨迹数据结构定义 ==========
 // 简化的轨迹点结构（不依赖ROS2消息）
@@ -50,10 +68,17 @@ public:
                   const std::map<std::string, std::vector<uint32_t>>& interface_motor_config,
                   MotorBatchStatusCallback batch_callback);
     
-    // 事件总线构造函数（推荐用于新项目）
+    // 观察者构造函数（用于观察者模式）
     RobotHardware(std::shared_ptr<hardware_driver::motor_driver::MotorDriverInterface> motor_driver,
                   const std::map<std::string, std::vector<uint32_t>>& interface_motor_config,
-                  std::shared_ptr<hardware_driver::event::EventBus> event_bus);
+                  std::shared_ptr<hardware_driver::motor_driver::MotorStatusObserver> observer);
+    
+    // 事件总线构造函数（事件总线模式）
+    RobotHardware(std::shared_ptr<hardware_driver::motor_driver::MotorDriverInterface> motor_driver,
+                  const std::map<std::string, std::vector<uint32_t>>& interface_motor_config,
+                  std::shared_ptr<hardware_driver::event::EventBus> event_bus,
+                  std::shared_ptr<hardware_driver::motor_driver::MotorEventHandler> event_handler);
+    
     ~RobotHardware();
 
     // 状态获取通过回调机制实现，不需要主动查询接口
@@ -84,6 +109,9 @@ public:
     // ========== 轨迹执行接口 ==========
     bool execute_trajectory(const std::string& interface, const Trajectory& trajectory);
     
+    // ========== 状态监控控制方法 ==========
+    void pause_status_monitoring();
+    void resume_status_monitoring();
 private:
     std::shared_ptr<hardware_driver::motor_driver::MotorDriverInterface> motor_driver_;
     std::map<std::string, std::vector<uint32_t>> interface_motor_config_;  // 每个接口对应的电机ID列表
@@ -98,6 +126,14 @@ private:
     // 状态聚合器相关
     std::map<std::string, std::map<uint32_t, hardware_driver::motor_driver::Motor_Status>> status_cache_;
     std::mutex cache_mutex_;
+    
+    // 状态监控控制相关
+    std::shared_ptr<hardware_driver::motor_driver::MotorStatusObserver> current_observer_;
+    std::shared_ptr<hardware_driver::motor_driver::MotorEventHandler> current_event_handler_;
+    bool monitoring_paused_ = false;
+    
+    // 事件订阅管理 - 保持订阅者的生命周期
+    std::vector<std::shared_ptr<hardware_driver::event::EventHandler>> event_subscriptions_;
     
     // 内部状态聚合方法
     void handle_motor_status_with_aggregation(const std::string& interface, uint32_t motor_id, 

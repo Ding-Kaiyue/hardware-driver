@@ -1,5 +1,6 @@
 #include "motor_driver_impl.hpp"
 #include "bus/canfd_bus_impl.hpp"
+#include <thread>
 
 namespace hardware_driver {
 namespace motor_driver {
@@ -619,6 +620,9 @@ void MotorDriverImpl::emit_motor_status_event(const std::string& interface, uint
             std::cerr << "Error emitting motor status event: " << e.what() << std::endl;
         }
     }
+    // else {
+    //     std::cout << "DEBUG: event_bus为空，无法发布事件" << std::endl;
+    // }
 }
 
 void MotorDriverImpl::emit_motor_batch_status_event(const std::string& interface, const std::map<uint32_t, Motor_Status>& status_all) {

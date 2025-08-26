@@ -74,34 +74,6 @@ struct PriorityComparator {
     }
 };
 
-// 电机状态观察者接口
-class MotorStatusObserver {
-public:
-    virtual ~MotorStatusObserver() = default;
-    
-    // 单个电机状态更新事件
-    virtual void on_motor_status_update(const std::string& interface, 
-                                       uint32_t motor_id, 
-                                       const Motor_Status& status) = 0;
-    
-    // 批量电机状态更新事件 - 一个接口的所有电机状态
-    virtual void on_motor_status_update(const std::string& /*interface*/,
-                                       const std::map<uint32_t, Motor_Status>& /*status_all*/) {}
-    
-    // 函数操作结果事件
-    virtual void on_motor_function_result(const std::string& /*interface*/,
-                                         uint32_t /*motor_id*/,
-                                         uint8_t /*op_code*/,
-                                         bool /*success*/) {}
-    
-    // 参数读写结果事件
-    virtual void on_motor_parameter_result(const std::string& /*interface*/,
-                                          uint32_t /*motor_id*/,
-                                          uint16_t /*address*/,
-                                          uint8_t /*data_type*/,
-                                          const std::any& /*data*/) {}
-};
-
 // 可配置的时序参数结构体
 struct TimingConfig {
     std::chrono::microseconds control_interval{200};     // 控制命令间隔
