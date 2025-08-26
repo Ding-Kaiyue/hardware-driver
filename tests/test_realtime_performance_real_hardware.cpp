@@ -96,7 +96,7 @@ protected:
         motor_driver_->set_motor_config(motor_config);
         
         // 创建机器人硬件接口
-        robot_hardware_ = std::make_shared<RobotHardware>(motor_driver_, motor_config, event_bus_);
+        robot_hardware_ = std::make_shared<RobotHardware>(motor_driver_, motor_config);
         
         // 等待系统初始化
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
