@@ -65,6 +65,9 @@ public:
     std::map<std::string, std::map<uint32_t, Motor_Status>> status_map;
     std::mutex status_mutex;
     std::atomic<int> status_update_count{0};
+    std::atomic<int> batch_status_update_count{0};
+    std::atomic<int> function_result_count{0};
+    std::atomic<int> parameter_result_count{0};
     
     void on_motor_status_update(const std::string& interface, 
                                uint32_t motor_id, 
@@ -72,6 +75,30 @@ public:
         std::lock_guard<std::mutex> lock(status_mutex);
         status_map[interface][motor_id] = status;
         status_update_count++;
+    }
+    
+    void on_motor_status_update(const std::string& interface,
+                               const std::map<uint32_t, Motor_Status>& status_all) override {
+        std::lock_guard<std::mutex> lock(status_mutex);
+        for (const auto& [motor_id, status] : status_all) {
+            status_map[interface][motor_id] = status;
+        }
+        batch_status_update_count++;
+    }
+    
+    void on_motor_function_result(const std::string& /*interface*/,
+                                 uint32_t /*motor_id*/,
+                                 uint8_t /*op_code*/,
+                                 bool /*success*/) override {
+        function_result_count++;
+    }
+    
+    void on_motor_parameter_result(const std::string& /*interface*/,
+                                  uint32_t /*motor_id*/,
+                                  uint16_t /*address*/,
+                                  uint8_t /*data_type*/,
+                                  const std::any& /*data*/) override {
+        parameter_result_count++;
     }
     
     Motor_Status get_motor_status(const std::string& interface, uint32_t motor_id) {
@@ -88,6 +115,9 @@ public:
         std::lock_guard<std::mutex> lock(status_mutex);
         status_map.clear();
         status_update_count = 0;
+        batch_status_update_count = 0;
+        function_result_count = 0;
+        parameter_result_count = 0;
     }
 };
 

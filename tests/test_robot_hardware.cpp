@@ -166,8 +166,8 @@ TEST(RobotHardwareTest, VelocityAndDisable) {
     auto status_collector = std::make_shared<TestMotorStatusCollector>(nullptr);  // 不使用事件总线
     real_driver->add_observer(status_collector);
     
-    // 创建RobotHardware实例，使用默认构造（观察者模式）
-    RobotHardware hw(real_driver, config);
+    // 创建RobotHardware实例，使用观察者模式构造函数
+    RobotHardware hw(real_driver, config, status_collector);
 
     std::cout << "=== 速度指令和失能测试 ===" << std::endl;
     std::cout << "可用接口: ";
