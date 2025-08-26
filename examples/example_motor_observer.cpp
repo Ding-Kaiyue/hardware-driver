@@ -35,10 +35,11 @@ public:
                                   uint32_t motor_id,
                                   uint16_t address,
                                   uint8_t data_type,
-                                  const std::any& data) override {
+                                  const std::any& /*data*/) override {
         std::cout << "📊 参数操作结果: " << interface << ":" << motor_id
                   << " | 地址:0x" << std::hex << address << std::dec
-                  << " | 类型:" << static_cast<int>(data_type) << std::endl;
+                  << " | 类型:" << static_cast<int>(data_type) 
+                  << std::endl;
     }
 };
 
