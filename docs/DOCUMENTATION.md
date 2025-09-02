@@ -314,7 +314,7 @@ public:
     virtual void on_motor_status_update(const std::string& interface, uint32_t motor_id, 
                                        const Motor_Status& status) = 0;
     
-    virtual void on_motor_batch_status_update(const std::string& interface, 
+    virtual void on_motor_status_update(const std::string& interface, 
                                              const std::map<uint32_t, Motor_Status>& status_all) = 0;
     
     virtual void on_motor_function_result(const std::string& interface, uint32_t motor_id, 
