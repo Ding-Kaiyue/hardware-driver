@@ -368,7 +368,8 @@ bool RobotHardware::execute_trajectory(const std::string& interface, const Traje
                 float acceleration = (i < point.accelerations.size()) ? static_cast<float>(point.accelerations[i]) : 0.0f;
                 
                 // 使用MIT模式控制，复用现有的频率控制和优先级机制
-                control_motor_in_mit_mode(interface, motor_ids[i], position, velocity, acceleration);
+                // control_motor_in_mit_mode(interface, motor_ids[i], position, velocity, acceleration);
+                control_motor_in_position_mode(interface, motor_ids[i], position);
             }
         }
         return true;
