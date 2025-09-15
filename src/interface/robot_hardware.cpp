@@ -5,6 +5,10 @@
 #include <chrono>
 #include <thread>
 #include <cstring>
+#include <iostream>
+#include <iomanip>
+#include <cstdio>
+#include <atomic>
 
 # define REQUEST_ALL
 // # define REQUEST_BY_MOTOR_ID     // 只适用于单条总线
@@ -353,25 +357,80 @@ bool RobotHardware::execute_trajectory(const std::string& interface, const Traje
     try {
         const auto& motor_ids = config_it->second;
         auto start_time = std::chrono::steady_clock::now();
+        size_t total_points = trajectory.points.size();
         
-        for (const auto& point : trajectory.points) {
-            // 计算目标时间
-            auto target_time = start_time + std::chrono::duration<double>(point.time_from_start);
+        // 使用原子变量跟踪执行进度，供进度条线程使用
+        std::atomic<size_t> current_point{0};
+        std::atomic<bool> execution_done{false};
+        
+        // 启动进度条显示线程，直接写入终端设备
+        std::thread progress_thread([&current_point, &execution_done, total_points]() {
+            // 尝试直接打开终端设备
+            FILE* tty = fopen("/dev/tty", "w");
+            if (!tty) {
+                tty = stderr; // 如果打开失败，回退到stderr
+            }
             
-            // 等待到正确时间
-            std::this_thread::sleep_until(target_time);
+            while (!execution_done) {
+                size_t point_idx = current_point.load();
+                
+                // 只有当有实际进度时才显示进度条（跳过0%的显示）
+                if (point_idx > 0) {
+                    double progress = static_cast<double>(point_idx) / total_points;
+                    int bar_width = 30;
+                    int filled = static_cast<int>(progress * bar_width);
+                    
+                    fprintf(tty, "\r轨迹执行进度: [");
+                    for (int i = 0; i < bar_width; ++i) {
+                        if (i < filled) fprintf(tty, "█");
+                        else fprintf(tty, "░");
+                    }
+                    fprintf(tty, "] %.1f%% (点 %zu/%zu)", progress * 100.0, point_idx, total_points);
+                    fflush(tty);
+                }
+                
+                std::this_thread::sleep_for(std::chrono::milliseconds(25));
+            }
+            
+            // 显示最终100%进度
+            fprintf(tty, "\r轨迹执行进度: [");
+            for (int i = 0; i < 30; ++i) {
+                fprintf(tty, "█");
+            }
+            fprintf(tty, "] 100.0%% (点 %zu/%zu)\n", total_points, total_points);
+            fflush(tty);
+            
+            if (tty != stderr) {
+                fclose(tty);
+            }
+        });
+        
+        // 执行轨迹，不添加任何延时
+        for (size_t point_idx = 0; point_idx < trajectory.points.size(); ++point_idx) {
+            const auto& point = trajectory.points[point_idx];
+            
+            // 计算目标时间并等待
+            auto target_time = start_time + std::chrono::duration<double>(point.time_from_start);
+            auto current_time = std::chrono::steady_clock::now();
+            
+            // 如果还没到时间，就等待
+            if (current_time < target_time) {
+                std::this_thread::sleep_until(target_time);
+            }
             
             // 发送控制命令到每个电机
             for (size_t i = 0; i < motor_ids.size() && i < point.positions.size(); ++i) {
                 float position = static_cast<float>(point.positions[i]);
-                float velocity = (i < point.velocities.size()) ? static_cast<float>(point.velocities[i]) : 0.0f;
-                float acceleration = (i < point.accelerations.size()) ? static_cast<float>(point.accelerations[i]) : 0.0f;
-                
-                // 使用MIT模式控制，复用现有的频率控制和优先级机制
-                // control_motor_in_mit_mode(interface, motor_ids[i], position, velocity, acceleration);
                 control_motor_in_position_mode(interface, motor_ids[i], position);
             }
+            
+            // 更新进度（供进度条线程使用）
+            current_point.store(point_idx + 1);
         }
+        
+        // 标记执行完成并等待进度条线程结束
+        execution_done = true;
+        progress_thread.join();
         return true;
     } catch (const std::exception&) {
         return false;
