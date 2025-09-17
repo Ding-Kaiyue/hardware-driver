@@ -389,7 +389,7 @@ bool RobotHardware::execute_trajectory(const std::string& interface, const Traje
                     fflush(tty);
                 }
                 
-                std::this_thread::sleep_for(std::chrono::milliseconds(25));
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
             
             // 显示最终100%进度
