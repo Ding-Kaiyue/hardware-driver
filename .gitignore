@@ -1,5 +1,7 @@
 # 构建目录
 build/
+install/
+log/
 
 # 发布包
 hardware_driver_release/
