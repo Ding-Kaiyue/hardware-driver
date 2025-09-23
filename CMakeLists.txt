@@ -24,7 +24,7 @@ find_package(Threads REQUIRED)
 # TBB库已移除，使用std::unordered_map + std::shared_mutex替代
 
 # === canfd 组合 ===
-add_library(arm_with_omnipicker_canfd SHARED
+add_library(hardware_driver_canfd SHARED
   src/bus/canfd_bus_impl.cpp
   src/driver/motor_driver_impl.cpp
   src/driver/gripper_driver_impl.cpp
@@ -35,24 +35,24 @@ add_library(arm_with_omnipicker_canfd SHARED
 # 设置链接库
 set(HARDWARE_DRIVER_LIBS Threads::Threads)
 
-target_link_libraries(arm_with_omnipicker_canfd ${HARDWARE_DRIVER_LIBS})
-target_include_directories(arm_with_omnipicker_canfd PRIVATE src include)
+target_link_libraries(hardware_driver_canfd ${HARDWARE_DRIVER_LIBS})
+target_include_directories(hardware_driver_canfd PRIVATE src include)
 
 # 设置库的版本信息
-set_target_properties(arm_with_omnipicker_canfd PROPERTIES
+set_target_properties(hardware_driver_canfd PROPERTIES
   VERSION 2.0.0
   SOVERSION 2
   OUTPUT_NAME "hardware_driver"
 )
 
 # 设置库的输出目录到lib文件夹
-set_target_properties(arm_with_omnipicker_canfd PROPERTIES
+set_target_properties(hardware_driver_canfd PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
   ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
 )
 
 # === ethercat 组合 ===
-# add_library(arm_with_omnipicker_ethercat SHARED
+# add_library(hardware_driver_ethercat SHARED
 #   src/bus/ethercat_bus_impl.cpp
 #   src/driver/motor_driver_impl.cpp
 #   src/driver/gripper_driver_impl.cpp
@@ -60,8 +60,14 @@ set_target_properties(arm_with_omnipicker_canfd PROPERTIES
 #   src/protocol/gripper_omnipicker_protocol.cpp
 #   src/interface/robot_hardware.cpp
 # )
-# target_link_libraries(arm_with_omnipicker_ethercat Threads::Threads)
-# target_include_directories(arm_with_omnipicker_ethercat PRIVATE src)
+# target_link_libraries(hardware_driver_ethercat Threads::Threads)
+# target_include_directories(hardware_driver_ethercat PRIVATE src include)
+# # 设置库的版本信息
+# set_target_properties(hardware_driver_ethercat PROPERTIES
+#   VERSION 2.0.0
+#   SOVERSION 2
+#   OUTPUT_NAME "hardware_driver"
+# )
 
 # === 示例程序构建 ===
 # 查找所有示例文件并构建到build/examples
@@ -75,7 +81,7 @@ if(EXAMPLE_SOURCES)
       RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/examples
     )
     target_link_libraries(${EXAMPLE_NAME}
-      arm_with_omnipicker_canfd
+      hardware_driver_canfd
       ${HARDWARE_DRIVER_LIBS}
     )
   endforeach()
@@ -85,17 +91,17 @@ endif()
 install(DIRECTORY include/hardware_driver DESTINATION include)
 
 # 创建硬件驱动库的别名
-add_library(hardware_driver ALIAS arm_with_omnipicker_canfd)
+add_library(hardware_driver ALIAS hardware_driver_canfd)
 
 # 设置安装时的库名称
-set_target_properties(arm_with_omnipicker_canfd PROPERTIES
+set_target_properties(hardware_driver_canfd PROPERTIES
   LIBRARY_OUTPUT_NAME "hardware_driver"
   ARCHIVE_OUTPUT_NAME "hardware_driver"
 )
 
 install(TARGETS
-  arm_with_omnipicker_canfd
-  # arm_with_omnipicker_ethercat
+  hardware_driver_canfd
+  # hardware_driver_ethercat
   EXPORT hardware_driverTargets
   LIBRARY DESTINATION lib
   ARCHIVE DESTINATION lib
@@ -148,7 +154,7 @@ if(BUILD_TESTS)
         
         # 链接所需库
         target_link_libraries(${TEST_NAME}
-          arm_with_omnipicker_canfd
+          hardware_driver_canfd
           GTest::gtest
           GTest::gtest_main
           GTest::gmock
