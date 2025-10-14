@@ -364,7 +364,7 @@ bool RobotHardware::execute_trajectory(const std::string& interface, const Traje
         std::atomic<bool> execution_done{false};
         
         // 启动进度条显示线程，直接写入终端设备
-        std::thread progress_thread([&current_point, &execution_done, total_points]() {
+        std::thread progress_thread([&current_point, &execution_done, total_points, &interface]() {
             // 尝试直接打开终端设备
             FILE* tty = fopen("/dev/tty", "w");
             if (!tty) {
@@ -380,7 +380,7 @@ bool RobotHardware::execute_trajectory(const std::string& interface, const Traje
                     int bar_width = 30;
                     int filled = static_cast<int>(progress * bar_width);
                     
-                    fprintf(tty, "\r轨迹执行进度: [");
+                    fprintf(tty, "\r[%s] 轨迹执行进度: [", interface.c_str());
                     for (int i = 0; i < bar_width; ++i) {
                         if (i < filled) fprintf(tty, "█");
                         else fprintf(tty, "░");
@@ -393,7 +393,7 @@ bool RobotHardware::execute_trajectory(const std::string& interface, const Traje
             }
             
             // 显示最终100%进度
-            fprintf(tty, "\r轨迹执行进度: [");
+            fprintf(tty, "\r[%s] 轨迹执行进度: [", interface.c_str());
             for (int i = 0; i < 30; ++i) {
                 fprintf(tty, "█");
             }

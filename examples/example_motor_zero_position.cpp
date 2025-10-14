@@ -57,7 +57,7 @@ int main() {
     
     // 配置电机接口和ID映射
     std::map<std::string, std::vector<uint32_t>> motor_config = {
-        {"can0", {1, 9}}    // can0 接口上的电机
+        {"can0", {1, 2, 3, 4, 5, 6}}    // can0 接口上的电机
     };
     
     // 使用工厂函数创建CANFD电机驱动

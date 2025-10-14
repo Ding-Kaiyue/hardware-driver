@@ -3,6 +3,9 @@ project(hardware_driver)
 
 set(CMAKE_CXX_STANDARD 17)
 
+# Find dependencies
+find_package(ament_cmake REQUIRED)
+
 # 添加构建测试的选项，默认为 OFF
 option(BUILD_TESTS "Build unit tests" OFF)
 
@@ -172,3 +175,6 @@ if(BUILD_TESTS)
 else()
   message(STATUS "BUILD_TESTS=OFF, skipping tests (use -DBUILD_TESTS=ON to enable)")
 endif()
+
+# === Finalize package ===
+ament_package()
