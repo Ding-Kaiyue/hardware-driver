@@ -96,7 +96,7 @@ int main() {
         // robot->control_motor_in_velocity_mode("can0", test_motor1, 0.0);
         // robot->control_motor_in_velocity_mode("can0", test_motor2, 0.0);
         // robot->control_motor_in_velocity_mode("can0", test_motor3, 0.0);
-        robot->control_motor_in_velocity_mode("can0", test_motor4, 0.0);
+        // robot->control_motor_in_velocity_mode("can0", test_motor4, 0.0);
         // robot->control_motor_in_velocity_mode("can0", test_motor5, 0.0);
         // robot->control_motor_in_velocity_mode("can0", test_motor6, 0.0);
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -115,12 +115,12 @@ int main() {
         robot->resume_status_monitoring();
         
         std::cout << "位置控制：转到 90 度..." << std::endl;
-        // robot->control_motor_in_position_mode("can0", test_motor1, 90.0);
-        // robot->control_motor_in_position_mode("can0", test_motor2, 90.0);
-        // robot->control_motor_in_position_mode("can0", test_motor3, 90.0);
-        // robot->control_motor_in_position_mode("can0", test_motor4, 90.0);
-        // robot->control_motor_in_position_mode("can0", test_motor5, 90.0);
-        // robot->control_motor_in_position_mode("can0", test_motor6, 90.0);
+        robot->control_motor_in_position_mode("can0", test_motor1, 90.0);
+        robot->control_motor_in_position_mode("can0", test_motor2, 90.0);
+        robot->control_motor_in_position_mode("can0", test_motor3, 90.0);
+        robot->control_motor_in_position_mode("can0", test_motor4, 90.0);
+        robot->control_motor_in_position_mode("can0", test_motor5, 90.0);
+        robot->control_motor_in_position_mode("can0", test_motor6, 90.0);
         std::this_thread::sleep_for(std::chrono::seconds(5));
         
         std::cout << "\n=== 步骤4: 回零位置 ===" << std::endl;
@@ -129,12 +129,12 @@ int main() {
         std::cin.get();
         robot->resume_status_monitoring();
         
-        // robot->control_motor_in_position_mode("can0", test_motor1, 0.0);
-        // robot->control_motor_in_position_mode("can0", test_motor2, 0.0);
-        // robot->control_motor_in_position_mode("can0", test_motor3, 0.0);
-        // robot->control_motor_in_position_mode("can0", test_motor4, 0.0);
-        // robot->control_motor_in_position_mode("can0", test_motor5, 0.0);
-        // robot->control_motor_in_position_mode("can0", test_motor6, 0.0);
+        robot->control_motor_in_position_mode("can0", test_motor1, 0.0);
+        robot->control_motor_in_position_mode("can0", test_motor2, 0.0);
+        robot->control_motor_in_position_mode("can0", test_motor3, 0.0);
+        robot->control_motor_in_position_mode("can0", test_motor4, 0.0);
+        robot->control_motor_in_position_mode("can0", test_motor5, 0.0);
+        robot->control_motor_in_position_mode("can0", test_motor6, 0.0);
         std::this_thread::sleep_for(std::chrono::seconds(5));
         
         std::cout << "\n=== 步骤5: 失能电机 ===" << std::endl;
