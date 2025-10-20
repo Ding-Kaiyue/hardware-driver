@@ -39,7 +39,12 @@ add_library(hardware_driver_canfd SHARED
 set(HARDWARE_DRIVER_LIBS Threads::Threads)
 
 target_link_libraries(hardware_driver_canfd ${HARDWARE_DRIVER_LIBS})
-target_include_directories(hardware_driver_canfd PRIVATE src include)
+target_include_directories(hardware_driver_canfd
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+  PRIVATE src
+)
 
 # 设置库的版本信息
 set_target_properties(hardware_driver_canfd PROPERTIES
