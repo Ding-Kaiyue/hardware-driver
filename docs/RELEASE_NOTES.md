@@ -1,5 +1,49 @@
 # 发布说明
 
+## v2.1.0 - 2025-10-20 (改进版本)
+
+### 📢 重要说明
+
+**库的独立性澄清**：此版本澄清了库的核心特性：
+- ✅ **完全独立于ROS** - 可在任何C++项目中使用
+- ✅ **ROS 2兼容** - 同时支持ROS 2生态系统集成
+- ✅ **灵活选择** - 可选择是否与ROS集成
+
+此前因提供ROS support而可能造成的误解已在此版本中充分说明。
+
+### 🔧 改进内容
+
+#### 文档改进
+- 更新README.md，明确说明库的独立性和ROS兼容性
+- 添加清晰的项目badges（License、Build Status、C++标准、CMake版本）
+- 更新所有文档版本号到v2.1.0
+
+#### CI/CD修复
+- 修复GitHub Actions中ament_cmake找不到的问题
+- 改进cmake配置，显式指定CMAKE_PREFIX_PATH
+- 优化build流程，确保CI/CD稳定运行
+
+### ✅ 兼容性
+- 与v2.0.0完全兼容 - 无需修改现有代码
+- 所有API保持不变
+- 仅文档和构建配置改进
+
+### 📦 安装
+
+```bash
+# 源码编译
+git clone https://github.com/Ding-Kaiyue/hardware-driver.git
+cd hardware-driver
+mkdir build && cd build
+cmake -DCMAKE_PREFIX_PATH=/opt/ros/humble ..  # 如果使用ROS
+# 或者
+cmake ..  # 不使用ROS
+make -j$(nproc)
+sudo make install
+```
+
+---
+
 ## v2.0.0 - 2025-08-20 (重大版本更新)
 
 ### 🚀 重大特性
