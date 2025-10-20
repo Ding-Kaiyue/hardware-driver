@@ -28,15 +28,26 @@ jobs:
 
     - name: Build library
       run: |
-        bash -c 'set -e; source /opt/ros/humble/setup.bash; mkdir build; cd build; cmake ..; make -j$(nproc)'
+        source /opt/ros/humble/setup.bash
+        mkdir build
+        cd build
+        cmake ..
+        make -j$(nproc)
 
     - name: Build examples
       run: |
-        bash -c 'set -e; source /opt/ros/humble/setup.bash; cd build; make -j$(nproc); ls -la examples/ || echo "No examples built"'
+        source /opt/ros/humble/setup.bash
+        cd build
+        make -j$(nproc)
+        ls -la examples/ || echo "No examples built"
 
     - name: Build tests with BUILD_TESTS=ON
       run: |
-        bash -c 'set -e; source /opt/ros/humble/setup.bash; cd build; cmake -DBUILD_TESTS=ON ..; make -j$(nproc); echo "Tests built successfully (not executed due to hardware requirements)"'
+        source /opt/ros/humble/setup.bash
+        cd build
+        cmake -DBUILD_TESTS=ON ..
+        make -j$(nproc)
+        echo "Tests built successfully (not executed due to hardware requirements)"
 
     - name: Check build artifacts
       run: |
