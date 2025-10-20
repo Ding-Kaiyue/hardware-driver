@@ -1,6 +1,12 @@
 # Hardware Driver Library
 
-一个现代化的、事件驱动的硬件驱动库，为机器人控制系统提供高性能、线程安全的电机驱动和状态监控。
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Build Status](https://github.com/Ding-Kaiyue/hardware-driver/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/Ding-Kaiyue/hardware-driver/actions/workflows/ci.yml)
+[![C++ Standard](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://en.cppreference.com/w/cpp/17)
+[![CMake](https://img.shields.io/badge/CMake-3.10+-blue.svg)](https://cmake.org/)
+[![ROS 2 Compatible](https://img.shields.io/badge/ROS%202-Compatible-blue)](https://docs.ros.org/en/humble/)
+
+一个现代化的、事件驱动的硬件驱动库，为机器人控制系统提供高性能、线程安全的电机驱动和状态监控。**完全独立于ROS，可直接在任何C++项目中使用，同时也完全兼容ROS 2生态系统。**
 
 ## 🚀 特性
 
