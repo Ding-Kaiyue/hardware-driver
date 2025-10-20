@@ -27,23 +27,23 @@ jobs:
         sudo apt-get install -y ros-humble-ament-cmake
 
     - name: Build library
+      shell: bash -c "source /opt/ros/humble/setup.bash && {0}"
       run: |
         mkdir build
         cd build
-        source /opt/ros/humble/setup.bash
         cmake ..
         make -j$(nproc)
 
     - name: Build examples
+      shell: bash -c "source /opt/ros/humble/setup.bash && {0}"
       run: |
-        source /opt/ros/humble/setup.bash
         cd build
         make -j$(nproc)
         ls -la examples/ || echo "No examples built"
 
     - name: Build tests with BUILD_TESTS=ON
+      shell: bash -c "source /opt/ros/humble/setup.bash && {0}"
       run: |
-        source /opt/ros/humble/setup.bash
         cd build
         cmake -DBUILD_TESTS=ON ..
         make -j$(nproc)
