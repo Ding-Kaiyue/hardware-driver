@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ master, v1.0.0 ]
+    branches: [ master, v2.0.0 ]
   pull_request:
     branches: [ master ]
 
@@ -28,25 +28,25 @@ jobs:
 
     - name: Build library
       run: |
-        . /opt/ros/humble/setup.bash
         mkdir -p build && cd build
-        cmake ..
+        . /opt/ros/humble/setup.bash
+        cmake -DCMAKE_PREFIX_PATH=/opt/ros/humble ..
         make -j$(nproc)
       shell: bash
 
     - name: Build examples
       run: |
-        . /opt/ros/humble/setup.bash
         cd build
+        . /opt/ros/humble/setup.bash
         make -j$(nproc)
         ls -la examples/ || echo "No examples built"
       shell: bash
 
     - name: Build tests with BUILD_TESTS=ON
       run: |
-        . /opt/ros/humble/setup.bash
         cd build
-        cmake -DBUILD_TESTS=ON ..
+        . /opt/ros/humble/setup.bash
+        cmake -DCMAKE_PREFIX_PATH=/opt/ros/humble -DBUILD_TESTS=ON ..
         make -j$(nproc)
         echo "Tests built successfully (not executed due to hardware requirements)"
       shell: bash
