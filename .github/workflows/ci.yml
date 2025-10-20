@@ -28,14 +28,15 @@ jobs:
 
     - name: Build library
       run: |
-        source /opt/ros/humble/setup.bash
         mkdir build
         cd build
+        source /opt/ros/humble/setup.bash
         cmake ..
         make -j$(nproc)
 
     - name: Build examples
       run: |
+        source /opt/ros/humble/setup.bash
         cd build
         make -j$(nproc)
         ls -la examples/ || echo "No examples built"
