@@ -3,6 +3,7 @@
 
 #include "hardware_driver/driver/motor_driver_interface.hpp"
 #include "protocol/motor_protocol.hpp"
+#include "protocol/iap_protocol.hpp"
 #include "hardware_driver/bus/bus_interface.hpp"
 #include "hardware_driver/event/event_bus.hpp"
 #include "hardware_driver/event/motor_events.hpp"
@@ -111,7 +112,17 @@ public:
     void motor_parameter_write(const std::string interface, const uint32_t motor_id, uint16_t address, int32_t value) override;
     void motor_parameter_write(const std::string interface, const uint32_t motor_id, uint16_t address, float value) override;
     void motor_function_operation(const std::string interface, const uint32_t motor_id, uint8_t operation) override;
-
+    
+    // IAP固件更新接口
+    /**
+     * @brief 启动IAP固件更新
+     * @param interface CAN总线接口名称
+     * @param motor_id 目标电机ID
+     * @param firmware_file 固件文件路径（如"9NM.bin"或"51NM.bin"）
+     * @return std::shared_ptr<IAPManager> IAP管理器指针
+     */
+    void start_update(const std::string& interface, uint32_t motor_id, const std::string& firmware_file) override;
+    
     // 新增公共接口
     void register_feedback_callback(FeedbackCallback callback);
     void send_control_command(const bus::GenericBusPacket& packet);
@@ -124,10 +135,16 @@ public:
     // 设置要监控的电机配置（用于反馈请求）
     void set_motor_config(const std::map<std::string, std::vector<uint32_t>>& config);
 
+    // 反馈请求控制接口
+    void pause_feedback_request();
+    void resume_feedback_request();
+
     // 观察者模式接口
     void add_observer(std::shared_ptr<MotorStatusObserver> observer);
+    void add_iap_observer(std::shared_ptr<IAPStatusObserver> observer);
     void remove_observer(std::shared_ptr<MotorStatusObserver> observer);
-    
+    void remove_iap_observer(std::shared_ptr<IAPStatusObserver> observer);
+
 private:
     std::shared_ptr<bus::BusInterface> bus_;
     // 简化的状态存储 - 使用线程安全哈希表，只保存最新状态
@@ -135,9 +152,17 @@ private:
     mutable std::shared_mutex status_map_mutex_;  // 读写锁，支持多读者单写者
     FeedbackCallback feedback_callback_;
     
+    // ===== IAP 反馈处理支持 =====
+    // 改用 map 存储每个 motor 的最新反馈，避免顺序依赖
+    std::map<uint32_t, hardware_driver::iap_protocol::IAPStatusMessage> iap_latest_feedback_;
+    std::mutex iap_feedback_mutex_;
+    std::condition_variable iap_feedback_cv_;
+
     // 观察者模式支持
     std::vector<std::weak_ptr<MotorStatusObserver>> observers_;
+    std::vector<std::weak_ptr<IAPStatusObserver>> iap_observers_;
     std::mutex observers_mutex_;  // 保护观察者列表
+    std::mutex iap_observers_mutex_;  // 保护观察者列表
 
     // 控制命令优先级队列和同步
     std::priority_queue<PriorityCommand, std::vector<PriorityCommand>, PriorityComparator> control_priority_queue_;
@@ -157,7 +182,9 @@ private:
     std::atomic<bool> high_freq_mode_{false};
     std::chrono::steady_clock::time_point last_control_time_;
     std::map<std::string, std::vector<uint32_t>> interface_motor_config_;
-    
+    std::map<std::string, std::vector<uint32_t>> saved_motor_config_;  // 保存暂停前的配置
+    std::atomic<bool> feedback_request_paused_{false};  // 反馈请求暂停标记
+
     // 时序参数
     TimingConfig timing_config_;
 
@@ -188,19 +215,26 @@ private:
     void notify_motor_status_observers(const std::string& interface, uint32_t motor_id, const Motor_Status& status);
     void notify_function_result_observers(const std::string& interface, uint32_t motor_id, uint8_t op_code, bool success);
     void notify_parameter_result_observers(const std::string& interface, uint32_t motor_id, uint16_t address, uint8_t data_type, const std::any& data);
-    
+    void notify_iap_observers(const std::string& interface, uint32_t motor_id, iap_protocol::IAPStatusMessage msg);
+
     // 重复命令检测
     bool is_duplicate_command(const bus::GenericBusPacket& packet);
-    
+
     // 事件总线支持
     std::shared_ptr<hardware_driver::event::EventBus> event_bus_;
     mutable std::mutex event_bus_mutex_;
-    
+
     // 事件发布方法
     void emit_motor_status_event(const std::string& interface, uint32_t motor_id, const Motor_Status& status);
     void emit_motor_batch_status_event(const std::string& interface, const std::map<uint32_t, Motor_Status>& status_all);
     void emit_motor_function_result_event(const std::string& interface, uint32_t motor_id, uint8_t op_code, bool success);
     void emit_motor_parameter_result_event(const std::string& interface, uint32_t motor_id, uint16_t address, uint8_t data_type, const std::any& data);
+
+    std::optional<hardware_driver::iap_protocol::IAPFeedback> wait_for_feedback(
+        const std::string& interface,
+        uint32_t motor_id,
+        hardware_driver::iap_protocol::IAPStatusMessage expected,
+        uint32_t timeout_ms);
 };
 
 }    // namespace motor_driver

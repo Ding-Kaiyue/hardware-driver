@@ -86,6 +86,21 @@ void MotorDriverImpl::set_motor_config(const std::map<std::string, std::vector<u
     }
 }
 
+void MotorDriverImpl::pause_feedback_request() {
+    // 保存当前配置并清空，停止反馈请求
+    saved_motor_config_ = interface_motor_config_;
+    interface_motor_config_.clear();
+    feedback_request_paused_.store(true, std::memory_order_release);
+    std::cout << "[Feedback] Paused feedback request" << std::endl;
+}
+
+void MotorDriverImpl::resume_feedback_request() {
+    // 恢复之前保存的配置
+    interface_motor_config_ = saved_motor_config_;
+    feedback_request_paused_.store(false, std::memory_order_release);
+    std::cout << "[Feedback] Resumed feedback request" << std::endl;
+}
+
 bool MotorDriverImpl::send_control_command_timeout(const bus::GenericBusPacket& packet, std::chrono::milliseconds timeout) {
     // 有界队列：带超时的安全版本，避免程序永久阻塞
     {
@@ -396,6 +411,19 @@ bus::GenericBusPacket MotorDriverImpl::create_feedback_request_all(const std::st
 }
 
 void MotorDriverImpl::handle_bus_packet(const bus::GenericBusPacket& packet) {
+    // 首先尝试解析 IAP 状态反馈（ASCII: "BS00", "BK01", ...）
+    auto iap_feedback_opt = iap_protocol::parse_iap_feedback(packet);
+    if (iap_feedback_opt) {
+        std::cout << "[IAP] ⇦ Received "
+                << iap_protocol::iap_status_to_string(iap_feedback_opt->status_msg)
+                << " from motor " << iap_feedback_opt->motor_id << std::endl;
+
+        // 通知所有注册的 IAP 观察者
+        notify_iap_observers(packet.interface, iap_feedback_opt->motor_id,
+                            iap_feedback_opt->status_msg);
+        return;
+    }
+
     auto feedback_opt = motor_protocol::parse_feedback(packet);
     if (!feedback_opt) return;
 
@@ -528,6 +556,11 @@ void MotorDriverImpl::add_observer(std::shared_ptr<MotorStatusObserver> observer
     observers_.push_back(std::weak_ptr<MotorStatusObserver>(observer));
 }
 
+void MotorDriverImpl::add_iap_observer(std::shared_ptr<IAPStatusObserver> observer) {
+    std::lock_guard<std::mutex> lock(iap_observers_mutex_);
+    iap_observers_.push_back(std::weak_ptr<IAPStatusObserver>(observer));
+}
+
 void MotorDriverImpl::remove_observer(std::shared_ptr<MotorStatusObserver> observer) {
     std::lock_guard<std::mutex> lock(observers_mutex_);
     observers_.erase(
@@ -536,6 +569,16 @@ void MotorDriverImpl::remove_observer(std::shared_ptr<MotorStatusObserver> obser
                 return weak_obs.lock() == observer;
             }), 
         observers_.end());
+}
+
+void MotorDriverImpl::remove_iap_observer(std::shared_ptr<IAPStatusObserver> observer) {
+    std::lock_guard<std::mutex> lock(iap_observers_mutex_);
+    iap_observers_.erase(
+        std::remove_if(iap_observers_.begin(), iap_observers_.end(),
+            [&observer](const std::weak_ptr<IAPStatusObserver>& weak_obs) {
+                return weak_obs.lock() == observer;
+            }), 
+        iap_observers_.end());
 }
 
 void MotorDriverImpl::notify_motor_status_observers(const std::string& interface, uint32_t motor_id, const Motor_Status& status) {
@@ -590,6 +633,32 @@ void MotorDriverImpl::notify_parameter_result_observers(const std::string& inter
             }
         } else {
             it = observers_.erase(it);
+        }
+    }
+}
+
+void MotorDriverImpl::notify_iap_observers(const std::string& interface, uint32_t motor_id, iap_protocol::IAPStatusMessage msg) {
+    // 保存最新反馈到 map，供 wait_for_feedback 使用
+    {
+        std::lock_guard<std::mutex> lock(iap_feedback_mutex_);
+        iap_latest_feedback_[motor_id] = msg;
+        iap_feedback_cv_.notify_all();  // 通知所有等待者
+    }
+
+    // 通知所有注册的 IAP 观察者
+    std::lock_guard<std::mutex> lock(iap_observers_mutex_);
+
+    for (auto it = iap_observers_.begin(); it != iap_observers_.end(); ) {
+        if (auto observer = it->lock()) {
+            try {
+                observer->on_iap_status_feedback(interface, motor_id, msg);
+                ++it;
+            } catch (const std::exception& e) {
+                std::cerr << "Observer error in IAP status feedback: " << e.what() << std::endl;
+                ++it;
+            }
+        } else {
+            it = iap_observers_.erase(it);
         }
     }
 }
@@ -700,6 +769,97 @@ bool MotorDriverImpl::is_duplicate_command(const bus::GenericBusPacket& packet) 
     }
     
     return is_duplicate;
+}
+
+// ========== IAP固件更新接口实现 ==========
+
+void MotorDriverImpl::start_update(const std::string& interface,
+                                   uint32_t motor_id,
+                                   const std::string& firmware_file)
+{
+    // 暂停反馈请求以减少CAN总线干扰
+    pause_feedback_request();
+
+    std::vector<uint8_t> firmware_data;
+
+    if (!iap_protocol::load_firmware_from_file(firmware_file, firmware_data)) {
+        std::cerr << "[IAP] Load firmware failed." << std::endl;
+        resume_feedback_request();  // 恢复反馈请求
+        return;
+    }
+
+    bus::GenericBusPacket packet;
+    packet.interface = interface;
+    packet.id = 0x1400 + motor_id;
+
+    try {
+        // 1. APP 模式下请求进入IAP
+        if (iap_protocol::pack_enter_iap_request(packet.data, packet.len)) {
+            send_control_command(packet);
+        }
+        wait_for_feedback(interface, motor_id, iap_protocol::IAPStatusMessage::AJ01, 2000);
+        wait_for_feedback(interface, motor_id, iap_protocol::IAPStatusMessage::BS00, 3000);
+
+        // 2. Boot模式下发送key
+        if (iap_protocol::pack_send_key(packet.data, packet.len)) {
+            send_control_command(packet);
+        }
+        wait_for_feedback(interface, motor_id, iap_protocol::IAPStatusMessage::BK01, 2000);
+        wait_for_feedback(interface, motor_id, iap_protocol::IAPStatusMessage::BK02, 2000);
+        wait_for_feedback(interface, motor_id, iap_protocol::IAPStatusMessage::BK03, 2000);
+
+        // 3. Boot模式下发送固件数据
+        for (size_t offset = 0; offset < firmware_data.size(); offset += 64) {
+            if (iap_protocol::pack_firmware_frame(packet.data, packet.len,
+                                                firmware_data, offset)) {
+                send_control_command(packet);
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+        // 等待数据接收完成（BJ06 在 500ms 无数据时自动发出）
+        wait_for_feedback(interface, motor_id, iap_protocol::IAPStatusMessage::BJ06, 3000);
+        wait_for_feedback(interface, motor_id, iap_protocol::IAPStatusMessage::AS00, 3000);
+        std::cout << "[IAP] ✅ Firmware update completed for motor "
+                  << interface << ":" << motor_id << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "[IAP] Error during firmware update: " << e.what() << std::endl;
+    }
+
+    // 恢复反馈请求
+    resume_feedback_request();
+}
+
+std::optional<hardware_driver::iap_protocol::IAPFeedback> MotorDriverImpl::wait_for_feedback(
+    const std::string& /*interface*/,
+    uint32_t motor_id,
+    hardware_driver::iap_protocol::IAPStatusMessage expected_msg,
+    uint32_t timeout_ms)
+{
+    std::unique_lock<std::mutex> lock(iap_feedback_mutex_);
+
+    auto start_time = std::chrono::steady_clock::now();
+    while (true) {
+        // 检查是否已经收到期望的反馈
+        auto it = iap_latest_feedback_.find(motor_id);
+        if (it != iap_latest_feedback_.end() && it->second == expected_msg) {
+            iap_protocol::IAPFeedback feedback{};
+            feedback.motor_id = motor_id;
+            feedback.status_msg = it->second;
+            return feedback;
+        }
+
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - start_time);
+        if (elapsed.count() > timeout_ms) {
+            std::cerr << "[IAP] ❌ Timeout waiting for "
+                      << iap_status_to_string(expected_msg)
+                      << " from motor " << motor_id << std::endl;
+            return std::nullopt;
+        }
+
+        // 等待新反馈到达
+        iap_feedback_cv_.wait_for(lock, std::chrono::milliseconds(10));
+    }
 }
 
 }   // namespace motor_driver

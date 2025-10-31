@@ -1,6 +1,17 @@
 cmake_minimum_required(VERSION 3.10...3.30)
 project(hardware_driver)
 
+# 防止in-source构建 - 强制使用build目录
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
+  message(FATAL_ERROR "
+禁止在源目录中进行构建。请使用以下方式构建：
+  mkdir build
+  cd build
+  cmake ..
+  make
+")
+endif()
+
 set(CMAKE_CXX_STANDARD 17)
 
 # Find dependencies
@@ -33,6 +44,7 @@ add_library(hardware_driver_canfd SHARED
   src/driver/gripper_driver_impl.cpp
   src/protocol/motor_protocol.cpp
   src/protocol/gripper_omnipicker_protocol.cpp
+  src/protocol/iap_protocol.cpp
   src/interface/robot_hardware.cpp
 )
 # 设置链接库

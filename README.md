@@ -14,6 +14,7 @@
 - **高性能**: 微秒级延迟，支持数百个电机并发控制
 - **线程安全**: 多线程优化，CPU亲和性绑定
 - **CAN-FD支持**: 高速可靠的工业通信
+- **IAP固件更新**: 内置 IAP 协议支持，支持在线固件更新
 - **模块化设计**: 清晰的总线-驱动-接口分层
 
 ## 📦 安装
@@ -109,6 +110,31 @@ auto observer = std::make_shared<MyMotorObserver>();
 motor_driver->add_observer(observer);
 ```
 
+### IAP固件更新（在线更新）
+
+```cpp
+#include "hardware_driver/interface/robot_hardware.hpp"
+
+// 定义IAP状态反馈观察者
+class IAPObserver : public hardware_driver::motor_driver::IAPStatusObserver {
+public:
+    void on_iap_status_feedback(const std::string& interface,
+                                uint32_t motor_id,
+                                const hardware_driver::iap_protocol::IAPStatusMessage& msg) override {
+        using namespace hardware_driver::iap_protocol;
+        std::cout << "[IAP] " << interface << ":" << motor_id << " -> "
+                  << iap_status_to_string(msg) << std::endl;
+    }
+};
+
+// 创建机器人硬件实例（带IAP观察者）
+auto iap_observer = std::make_shared<IAPObserver>();
+auto robot = std::make_shared<RobotHardware>(motor_driver, motor_config, iap_observer);
+
+// 执行固件更新
+robot->start_update("can0", 1, "./firmware/motor_v2.0.bin");
+```
+
 ### 事件总线模式（非实时组件推荐）
 
 ```cpp
@@ -119,8 +145,8 @@ motor_driver->add_observer(observer);
 auto event_bus = std::make_shared<EventBus>();
 auto handler = event_bus->subscribe<MotorStatusEvent>(
     [](const auto& event) {
-        std::cout << "事件: 电机 " << event->get_interface() << ":" 
-                  << event->get_motor_id() << " 位置=" 
+        std::cout << "事件: 电机 " << event->get_interface() << ":"
+                  << event->get_motor_id() << " 位置="
                   << event->get_status().position << std::endl;
     });
 ```
@@ -140,6 +166,15 @@ robot.control_motor_in_effort_mode("can0", 1, 2.5f);       // 力矩 (Nm)
 robot.control_motor_in_mit_mode("can0", 1, 45.0f, 5.0f, 1.0f); // MIT模式
 ```
 
+### IAP固件更新
+```cpp
+// 固件更新
+robot->start_update("can0", 1, "./firmware/motor_v2.0.bin");
+
+// 注意：在更新过程中自动暂停电机反馈请求，以减少CAN总线干扰
+// 更新完成后自动恢复反馈请求
+```
+
 ### 配置
 ```cpp
 // 硬件配置
@@ -156,6 +191,31 @@ timing.control_cpu_core = 4;
 motor_driver->set_timing_config(timing);
 ```
 
+## 📡 IAP协议说明
+
+### 协议概述
+IAP（In-Application Programming）允许在应用运行时对电机固件进行更新。驱动库提供了完整的 IAP 协议支持。
+
+### 协议流程
+1. **进入 IAP 模式**: 发送 `[0x01, 0x12]` 请求
+2. **Bootloader 启动**: 接收 `BS00` 状态
+3. **发送密钥**: 发送 `'k','e','y'` 进入 IAP 模式
+4. **接收状态**: 依次收到 `BK01`, `BK02`, `BK03`
+5. **传输固件数据**: 以 64 字节分块发送固件
+6. **完成**: 接收 `BJ06` 和 `AS00` 状态
+
+### 反馈消息
+| 消息 | 含义 | CAN ID |
+|-----|------|--------|
+| AJ01 | APP 收到 IAP 指令 | 0xFF + motor_id |
+| BS00 | Bootloader 启动 | 0xFF + motor_id |
+| BK01 | 收到 Key，进入 IAP | 0xFF + motor_id |
+| BK02 | 擦除 APP 程序 | 0xFF + motor_id |
+| BK03 | 准备接收固件数据 | 0xFF + motor_id |
+| BD04 | 接收数据中 | 0xFF + motor_id |
+| BJ06 | 跳转准备（校验完成） | 0xFF + motor_id |
+| AS00 | APP 启动成功 | 0xFF + motor_id |
+
 ## 🧪 测试
 
 ```bash
@@ -168,6 +228,9 @@ make test
 
 # 运行示例
 ./examples/example_motor_observer
+
+# 运行IAP固件更新示例
+./examples/example_iap_update
 ```
 
 ## 📊 性能
@@ -178,6 +241,30 @@ make test
 - **状态更新频率**: 2.5kHz (高频) / 20Hz (低频)
 - **CPU使用率**: < 5%
 - **内存占用**: < 50MB
+
+## 📁 项目结构
+
+```
+hardware_driver_lib/
+├── include/hardware_driver/          # 公开头文件
+│   ├── driver/                       # 驱动接口
+│   ├── interface/                    # 高层接口
+│   ├── bus/                          # 总线接口
+│   └── event/                        # 事件系统
+├── src/
+│   ├── driver/                       # 驱动实现
+│   ├── interface/                    # 接口实现
+│   ├── bus/                          # CAN总线实现
+│   ├── protocol/                     # IAP协议实现
+│   └── event/                        # 事件总线实现
+├── examples/                         # 使用示例
+│   ├── example_motor_observer.cpp    # 观察者模式示例
+│   ├── example_iap_update.cpp        # IAP固件更新示例
+│   └── ...
+├── tests/                            # 单元测试
+├── docs/                             # 文档
+└── CMakeLists.txt
+```
 
 ## 🛠️ 系统要求
 

@@ -5,6 +5,8 @@
 #include <vector>
 #include <map>
 #include <any>
+#include <memory>
+#include "protocol/iap_protocol.hpp"  // src/protocol/iap_protocol.hpp
 
 namespace hardware_driver {
 namespace motor_driver {
@@ -53,6 +55,21 @@ public:
                                           const std::any& /*data*/) {}
 };
 
+/**
+ * @brief  IAP 状态反馈观察者接口
+ */
+class IAPStatusObserver {
+public:
+    virtual ~IAPStatusObserver() = default;
+
+    /**
+     * @brief 当收到 IAP 状态消息（如 "BS00"、"BK01"、"BD05"、"AS00"）时回调
+     */
+    virtual void on_iap_status_feedback(const std::string& /*interface*/,
+                                        uint32_t /*motor_id*/,
+                                        const hardware_driver::iap_protocol::IAPStatusMessage& /*msg*/) {}
+};
+
 // 事件总线模式的事件处理器接口 - 与观察者模式保持相同的虚函数签名
 class MotorEventHandler {
 public:
@@ -97,6 +114,9 @@ public:
     virtual void motor_parameter_write(const std::string interface, const uint32_t motor_id, uint16_t address, int32_t value) = 0;
     virtual void motor_parameter_write(const std::string interface, const uint32_t motor_id, uint16_t address, float value) = 0;
     virtual void motor_parameter_read(const std::string interface, const uint32_t motor_id, uint16_t address) = 0;
+
+    // IAP (In-Application Programming) firmware update
+    virtual void start_update(const std::string& interface, uint32_t motor_id, const std::string& firmware_file) = 0;
 };
 
 

@@ -13,7 +13,10 @@
 - **[DEVELOPER.md](DEVELOPER.md)** - 开发者指南，架构设计，开发流程
 - **[DOCUMENTATION.md](DOCUMENTATION.md)** - API文档和使用示例
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - 完整架构文档和设计理念
+
+### 🔧 功能指南
 - **[EVENT_BUS_GUIDE.md](EVENT_BUS_GUIDE.md)** - 事件总线使用指南
+- **[IAP_UPDATE_GUIDE.md](IAP_UPDATE_GUIDE.md)** - IAP固件更新使用指南
 
 ### 📊 架构图表
 - **[系统概览图](diagrams/01_overview.puml)** - 整体架构一览 (从左到右)
@@ -37,6 +40,7 @@
 1. 阅读 [README.md](../README.md) 了解项目
 2. 查看 [RELEASE_NOTES.md](RELEASE_NOTES.md) 了解最新功能
 3. 参考 [DOCUMENTATION.md](DOCUMENTATION.md) 学习API使用
+4. 如需使用IAP固件更新，阅读 [IAP_UPDATE_GUIDE.md](IAP_UPDATE_GUIDE.md)
 
 ### 开发者
 1. 阅读 [DEVELOPER.md](DEVELOPER.md) 了解架构

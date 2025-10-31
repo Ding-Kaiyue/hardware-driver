@@ -72,7 +72,12 @@ public:
     RobotHardware(std::shared_ptr<hardware_driver::motor_driver::MotorDriverInterface> motor_driver,
                   const std::map<std::string, std::vector<uint32_t>>& interface_motor_config,
                   std::shared_ptr<hardware_driver::motor_driver::MotorStatusObserver> observer);
-    
+
+    // IAP观察者构造函数（用于IAP固件更新回调）
+    RobotHardware(std::shared_ptr<hardware_driver::motor_driver::MotorDriverInterface> motor_driver,
+                  const std::map<std::string, std::vector<uint32_t>>& interface_motor_config,
+                  std::shared_ptr<hardware_driver::motor_driver::IAPStatusObserver> iap_observer);
+
     // 事件总线构造函数（事件总线模式）
     RobotHardware(std::shared_ptr<hardware_driver::motor_driver::MotorDriverInterface> motor_driver,
                   const std::map<std::string, std::vector<uint32_t>>& interface_motor_config,
@@ -105,7 +110,10 @@ public:
     // ========== 函数操作接口 ==========
     void motor_function_operation(const std::string& interface, const uint32_t motor_id, uint8_t operation);
     void arm_zero_position_set(const std::string& interface, const std::vector<uint32_t> motor_ids);
-        
+    
+    // ========== IAP固件更新接口 ==========
+    void start_update(const std::string& interface, const uint8_t motor_id, const std::string& firmware_file);
+
     // ========== 轨迹执行接口 ==========
     bool execute_trajectory(const std::string& interface, const Trajectory& trajectory);
     
@@ -129,6 +137,7 @@ private:
     
     // 状态监控控制相关
     std::shared_ptr<hardware_driver::motor_driver::MotorStatusObserver> current_observer_;
+    std::shared_ptr<hardware_driver::motor_driver::IAPStatusObserver> current_iap_observer_;
     std::shared_ptr<hardware_driver::motor_driver::MotorEventHandler> current_event_handler_;
     bool monitoring_paused_ = false;
     

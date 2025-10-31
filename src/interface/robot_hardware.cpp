@@ -102,6 +102,36 @@ RobotHardware::RobotHardware(
     }
 }
 
+// IAP观察者构造函数
+RobotHardware::RobotHardware(
+    std::shared_ptr<hardware_driver::motor_driver::MotorDriverInterface> motor_driver,
+    const std::map<std::string, std::vector<uint32_t>>& interface_motor_config,
+    std::shared_ptr<hardware_driver::motor_driver::IAPStatusObserver> iap_observer)
+    : motor_driver_(std::move(motor_driver)),
+      interface_motor_config_(interface_motor_config),
+      status_callback_(nullptr),
+      batch_status_callback_(nullptr),
+      event_bus_(nullptr),
+      current_observer_(nullptr),
+      current_iap_observer_(iap_observer),
+      current_event_handler_(nullptr),
+      monitoring_paused_(false),
+      event_subscriptions_()
+{
+    // 转换为MotorDriverImpl以访问IAP观察者接口
+    auto motor_driver_impl = std::dynamic_pointer_cast<hardware_driver::motor_driver::MotorDriverImpl>(motor_driver_);
+
+    if (motor_driver_impl && current_iap_observer_) {
+        // 添加IAP观察者
+        motor_driver_impl->add_iap_observer(current_iap_observer_);
+
+        // 设置电机配置，启动反馈请求
+        motor_driver_impl->set_motor_config(interface_motor_config_);
+
+        std::cout << "RobotHardware initialized with IAPStatusObserver - IAP updates will be handled by observer" << std::endl;
+    }
+}
+
 // 事件总线构造函数（带事件处理器）
 RobotHardware::RobotHardware(
     std::shared_ptr<hardware_driver::motor_driver::MotorDriverInterface> motor_driver,
@@ -463,6 +493,10 @@ void RobotHardware::arm_zero_position_set(const std::string& interface, const st
        motor_driver_->motor_function_operation(interface, motor_ids.at(i), 2);
        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
+}
+
+void RobotHardware::start_update(const std::string& interface, const uint8_t motor_id, const std::string& firmware_file) {
+    motor_driver_->start_update(interface, motor_id, firmware_file);
 }
 
 // ========== 状态监控控制方法 ==========
