@@ -89,18 +89,19 @@ public:
     // 状态获取通过回调机制实现，不需要主动查询接口
     
     // ========== 电机控制接口 ==========
-    void control_motor_in_mit_mode(const std::string& interface, const uint32_t motor_id, float position, float velocity, float effort);
-    void control_motor_in_position_mode(const std::string& interface, const uint32_t motor_id, float position);
-    void control_motor_in_velocity_mode(const std::string& interface, const uint32_t motor_id, float velocity);
-    void control_motor_in_effort_mode(const std::string& interface, const uint32_t motor_id, float effort);
+    void control_motor_in_mit_mode(const std::string& interface, const uint32_t motor_id, float position, float velocity, float effort, float kp = 0.0, float kd = 0.0);
+    void control_motor_in_position_mode(const std::string& interface, const uint32_t motor_id, float position, float kp = 0.0, float kd = 0.0);
+    void control_motor_in_velocity_mode(const std::string& interface, const uint32_t motor_id, float velocity, float kp = 0.0, float kd = 0.0);
+    void control_motor_in_effort_mode(const std::string& interface, const uint32_t motor_id, float effort, float kp = 0.0, float kd = 0.0);
     void disable_motor(const std::string& interface, const uint32_t motor_id);
     void enable_motor(const std::string& interface, const uint32_t motor_id, uint8_t mode);
     
     // ========== 实时批量控制接口 ==========
-    bool send_realtime_velocity_command(const std::string& interface, const std::vector<double>& joint_velocities);
-    bool send_realtime_position_command(const std::string& interface, const std::vector<double>& joint_positions);
-    bool send_realtime_effort_command(const std::string& interface, const std::vector<double>& joint_efforts);
-    bool send_realtime_mit_command(const std::string& interface, const std::vector<double>& joint_positions, const std::vector<double>& joint_velocities, const std::vector<double>& joint_efforts);
+    bool send_realtime_velocity_command(const std::string& interface, const std::vector<double>& joint_velocities, const std::vector<double>& kps = {0.0}, const std::vector<double>& kds = {0.0});
+    bool send_realtime_position_command(const std::string& interface, const std::vector<double>& joint_positions, const std::vector<double>& kps = {0.0}, const std::vector<double>& kds = {0.0});
+    bool send_realtime_effort_command(const std::string& interface, const std::vector<double>& joint_efforts, const std::vector<double>& kps = {0.0}, const std::vector<double>& kds= {0.0});
+    bool send_realtime_mit_command(const std::string& interface, const std::vector<double>& joint_positions, const std::vector<double>& joint_velocities, const std::vector<double>& joint_efforts,
+                                   const std::vector<double>& kps = {0.0}, const std::vector<double>& kds = {0.0});
     
     // ========== 参数读写接口 ==========
     void motor_parameter_read(const std::string& interface, const uint32_t motor_id, uint16_t address);

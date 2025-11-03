@@ -13,6 +13,7 @@
  * @copyright   Copyright (c) 2025 Raysense Technology. All rights reserved.
  * 
  * @history     2025-07-22 Kaiyue Ding 创建文件，实现 CAN FD 协议解析
+ *              2025-11-03 Kaiyue Ding 修改协议实现方法，适配关节模组v0.0.1.5协议
  ***************************************************************************************/
 
 #include "motor_protocol.hpp"
@@ -108,7 +109,7 @@ std::optional<MotorFeedback> parse_canfd_feedback(const bus::GenericBusPacket& p
     uint32_t base = id & 0xFFFFFF00;
     uint8_t motor_id = id & 0xFF;
     const uint8_t* p_data = packet.data.data();
-    if (base == 0x100) { // 电机状态反馈 TODO: 修改为0x300
+    if (base == 0x300) { // 电机状态反馈 TODO: 修改为0x300
         MotorStatusFeedback feedback;
         feedback.interface = packet.interface;
         feedback.motor_id = motor_id;
@@ -151,12 +152,24 @@ std::optional<MotorFeedback> parse_ethercat_feedback(const bus::GenericBusPacket
     return std::nullopt;
 }
 
-bool pack_disable_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size_t& len)
+bool pack_disable_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size_t& len, uint8_t mode)
 {
     data[0] = 0x02;
     data[1] = 0x00;
-    data[2] = 0x04;     // delete this field in the future
+    data[2] = mode;
     len = 3;
+    return true;
+}
+
+bool pack_disable_all_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size_t& len,
+    std::vector<uint8_t> disable_flags, uint8_t mode)
+{
+    data[0] = disable_flags.size() + 1;
+    data[1] = 0x02;
+    for (size_t i = 0; i < disable_flags.size(); ++i) {
+        data[2 + i] = (disable_flags[i] << 4) | mode;
+    }
+    len = 2 + disable_flags.size();
     return true;
 }
 
@@ -165,60 +178,78 @@ bool pack_enable_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size
 {
     data[0] = 0x02;
     data[1] = 0x01;
-    data[2] = mode;   // maybe delete this field in the future
+    data[2] = mode;
     len = 3;
     return true;
 }
 
-bool pack_mit_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size_t& len,
-    float position, float velocity, float effort) 
+bool pack_enable_all_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size_t& len,
+    std::vector<uint8_t> enable_flags, uint8_t mode)
 {
-    data[0] = 0x0E;
-    data[1] = 0x01; // enable
-    data[2] = static_cast<uint8_t>(MotorControlMode::MIT_MODE);
-    float_to_big_endian_bytes(position, data.data() + 3);
-    float_to_big_endian_bytes(velocity, data.data() + 7);
-    float_to_big_endian_bytes(effort, data.data() + 11);
-    len = 15;
+    data[0] = enable_flags.size() + 1;
+    data[1] = 0x02;
+    for (size_t i = 0; i < enable_flags.size(); ++i) {
+        data[2 + i] = (enable_flags[i] << 4) | mode;
+    }
+    len = 2 + enable_flags.size();
     return true;
 }
 
-bool pack_position_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size_t& len,
-    float position)
+bool pack_control_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size_t& len,
+    float position, float velocity, float effort, float kp, float kd)
 {
     data[0] = 0x0E;
-    data[1] = 0x01; // enable
-    data[2] = static_cast<uint8_t>(MotorControlMode::POSITION_ABS_MODE);
-    float_to_big_endian_bytes(position, data.data() + 3);
-    std::memset(data.data() + 7, 0, sizeof(float));
-    std::memset(data.data() + 11, 0, sizeof(float));
-    len = 15;
+    float_to_big_endian_bytes(position, data.data() + 1);
+    float_to_big_endian_bytes(velocity, data.data() + 5);
+    float_to_big_endian_bytes(effort, data.data() + 9);
+    data[13] = (uint8_t)(kp * 1000);
+    data[14] = (uint8_t)(kd * 1000);
+    len = data[0] + 1;
     return true;
 }
 
-bool pack_velocity_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size_t& len,
-    float velocity)
+bool pack_control_all_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size_t& len,
+    const std::vector<float>& positions, const std::vector<float>& velocities,
+    const std::vector<float>& efforts, const std::vector<float>& kps, const std::vector<float>& kds)
 {
-    data[0] = 0x0E;
-    data[1] = 0x01; // enable
-    data[2] = static_cast<uint8_t>(MotorControlMode::SPEED_MODE);
-    std::memset(data.data() + 3, 0, sizeof(float));
-    float_to_big_endian_bytes(velocity, data.data() + 7);
-    std::memset(data.data() + 11, 0, sizeof(float));
-    len = 15;
-    return true;
-}
+    // 验证所有向量大小一致
+    size_t motor_count = positions.size();
+    if (velocities.size() != motor_count || efforts.size() != motor_count ||
+        kps.size() != motor_count || kds.size() != motor_count) {
+        return false;
+    }
 
-bool pack_effort_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size_t& len,
-    float effort)
-{
-    data[0] = 0x0E;
-    data[1] = 0x01; // enable
-    data[2] = static_cast<uint8_t>(MotorControlMode::EFFORT_MODE);
-    std::memset(data.data() + 3, 0, sizeof(float));
-    std::memset(data.data() + 7, 0, sizeof(float));
-    float_to_big_endian_bytes(effort, data.data() + 11);
-    len = 15;
+    // 第1位：数据长度 = 每个电机8字节 * 电机数 + 1（0x03标识）
+    data[0] = motor_count * 8 + 1;
+    // 第2位：批量控制标识
+    data[1] = 0x03;
+
+    // 循环填充每个电机的控制信息
+    for (size_t i = 0; i < motor_count; ++i) {
+        // 每个电机占8字节：位置(2字节) + 速度(2字节) + 力矩(2字节) + kp(1字节) + kd(1字节)
+        size_t offset = 2 + i * 8;
+
+        // 位置：int16_t，单位0.01
+        int16_t pos_int16 = static_cast<int16_t>(positions[i] * 100);
+        data[offset + 0] = (pos_int16 >> 8) & 0xFF;
+        data[offset + 1] = pos_int16 & 0xFF;
+
+        // 速度：int16_t，单位0.01
+        int16_t vel_int16 = static_cast<int16_t>(velocities[i] * 100);
+        data[offset + 2] = (vel_int16 >> 8) & 0xFF;
+        data[offset + 3] = vel_int16 & 0xFF;
+
+        // 力矩：int16_t，单位0.01
+        int16_t eff_int16 = static_cast<int16_t>(efforts[i] * 100);
+        data[offset + 4] = (eff_int16 >> 8) & 0xFF;
+        data[offset + 5] = eff_int16 & 0xFF;
+
+        // kp 和 kd：uint8_t，单位0.001
+        data[offset + 6] = static_cast<uint8_t>(kps[i] * 1000);
+        data[offset + 7] = static_cast<uint8_t>(kds[i] * 1000);
+    }
+
+    len = data[0] + 1;
     return true;
 }
 
@@ -275,9 +306,12 @@ bool pack_motor_feedback_request(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& da
     return true;
 }
 
-bool pack_motor_feedback_request_all(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& /*data*/, size_t& len)
+bool pack_motor_feedback_request_all(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size_t& len)
 {
-    len = 0;
+    data[0] = 0x02;
+    data[1] = 0x00;
+    data[2] = 0x00;
+    len = 3;
     return true;
 }
 

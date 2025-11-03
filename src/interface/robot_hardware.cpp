@@ -274,20 +274,24 @@ void RobotHardware::handle_motor_status_with_aggregation(const std::string& inte
 // ========== 电机控制接口 ==========
 // 简化控制接口 - 时间控制由motor_driver_impl内部处理
 
-void RobotHardware::control_motor_in_position_mode(const std::string& interface, const uint32_t motor_id, float position) {
-    motor_driver_->send_position_cmd(interface, motor_id, position);
+void RobotHardware::control_motor_in_position_mode(const std::string& interface, const uint32_t motor_id, float position,
+                                                float kp, float kd) {
+    motor_driver_->send_position_cmd(interface, motor_id, position, kp, kd);
 }
 
-void RobotHardware::control_motor_in_velocity_mode(const std::string& interface, const uint32_t motor_id, float velocity) {
-    motor_driver_->send_velocity_cmd(interface, motor_id, velocity);
+void RobotHardware::control_motor_in_velocity_mode(const std::string& interface, const uint32_t motor_id, float velocity,
+                                                float kp, float kd) {
+    motor_driver_->send_velocity_cmd(interface, motor_id, velocity, kp, kd);
 }
 
-void RobotHardware::control_motor_in_effort_mode(const std::string& interface, const uint32_t motor_id, float effort) {
-    motor_driver_->send_effort_cmd(interface, motor_id, effort);
+void RobotHardware::control_motor_in_effort_mode(const std::string& interface, const uint32_t motor_id, float effort,
+                                                float kp, float kd) {
+    motor_driver_->send_effort_cmd(interface, motor_id, effort, kp, kd);
 }
 
-void RobotHardware::control_motor_in_mit_mode(const std::string& interface, const uint32_t motor_id, float position, float velocity, float effort) {
-    motor_driver_->send_mit_cmd(interface, motor_id, position, velocity, effort);
+void RobotHardware::control_motor_in_mit_mode(const std::string& interface, const uint32_t motor_id, float position, float velocity, float effort,
+                                                float kp, float kd) {
+    motor_driver_->send_mit_cmd(interface, motor_id, position, velocity, effort, kp, kd);
 }
 
 void RobotHardware::disable_motor(const std::string& interface, const uint32_t motor_id) {
@@ -299,74 +303,199 @@ void RobotHardware::enable_motor(const std::string& interface, const uint32_t mo
 }
 
 // ========== 实时批量控制接口 ==========
-bool RobotHardware::send_realtime_velocity_command(const std::string& interface, const std::vector<double>& joint_velocities) {
+bool RobotHardware::send_realtime_velocity_command(const std::string& interface, const std::vector<double>& joint_velocities,
+    const std::vector<double>& kps, const std::vector<double>& kds) {
+
     auto config_it = interface_motor_config_.find(interface);
     if (config_it == interface_motor_config_.end()) {
         return false;
     }
-    
+
     try {
         const auto& motor_ids = config_it->second;
-        for (size_t i = 0; i < motor_ids.size(); ++i) {
-            float velocity = (i < joint_velocities.size()) ? static_cast<float>(joint_velocities[i]) : 0.0f;
-            control_motor_in_velocity_mode(interface, motor_ids[i], velocity);
+
+        // 验证输入向量长度
+        if (joint_velocities.empty()) {
+            return false;
         }
+
+        // kps 和 kds 可以为空（使用默认值）或与 motor_ids 长度一致
+        size_t expected_size = motor_ids.size();
+        if (!kps.empty() && kps.size() != expected_size) {
+            return false;
+        }
+        if (!kds.empty() && kds.size() != expected_size) {
+            return false;
+        }
+
+        // 转换为 float 向量
+        std::vector<float> velocities;
+        std::vector<float> kps_float;
+        std::vector<float> kds_float;
+
+        velocities.reserve(expected_size);
+        kps_float.reserve(expected_size);
+        kds_float.reserve(expected_size);
+
+        for (size_t i = 0; i < expected_size; ++i) {
+            velocities.push_back(i < joint_velocities.size() ? static_cast<float>(joint_velocities[i]) : 0.0f);
+            kps_float.push_back(!kps.empty() ? static_cast<float>(kps[i]) : 0.0f);
+            kds_float.push_back(!kds.empty() ? static_cast<float>(kds[i]) : 0.0f);
+        }
+
+        // 使用批量控制接口
+        motor_driver_->send_velocity_cmd_all(interface, velocities, kps_float, kds_float);
         return true;
     } catch (const std::exception&) {
         return false;
     }
 }
 
-bool RobotHardware::send_realtime_position_command(const std::string& interface, const std::vector<double>& joint_positions) {
+bool RobotHardware::send_realtime_position_command(const std::string& interface, const std::vector<double>& joint_positions,
+    const std::vector<double>& kps, const std::vector<double>& kds) {
+
     auto config_it = interface_motor_config_.find(interface);
     if (config_it == interface_motor_config_.end()) {
         return false;
     }
-    
-    try {        
+
+    try {
         const auto& motor_ids = config_it->second;
-        for (size_t i = 0; i < motor_ids.size(); ++i) {
-            float position = (i < joint_positions.size()) ? static_cast<float>(joint_positions[i]) : 0.0f;
-            control_motor_in_position_mode(interface, motor_ids[i], position);
+
+        // 验证输入向量长度
+        if (joint_positions.empty()) {
+            return false;
         }
+
+        // kps 和 kds 可以为空（使用默认值）或与 motor_ids 长度一致
+        size_t expected_size = motor_ids.size();
+        if (!kps.empty() && kps.size() != expected_size) {
+            return false;
+        }
+        if (!kds.empty() && kds.size() != expected_size) {
+            return false;
+        }
+
+        // 转换为 float 向量
+        std::vector<float> positions;
+        std::vector<float> kps_float;
+        std::vector<float> kds_float;
+
+        positions.reserve(expected_size);
+        kps_float.reserve(expected_size);
+        kds_float.reserve(expected_size);
+
+        for (size_t i = 0; i < expected_size; ++i) {
+            positions.push_back(i < joint_positions.size() ? static_cast<float>(joint_positions[i]) : 0.0f);
+            kps_float.push_back(!kps.empty() ? static_cast<float>(kps[i]) : 0.0f);
+            kds_float.push_back(!kds.empty() ? static_cast<float>(kds[i]) : 0.0f);
+        }
+
+        // 使用批量控制接口
+        motor_driver_->send_position_cmd_all(interface, positions, kps_float, kds_float);
         return true;
     } catch (const std::exception&) {
         return false;
     }
 }
 
-bool RobotHardware::send_realtime_effort_command(const std::string& interface, const std::vector<double>& joint_efforts) {
+bool RobotHardware::send_realtime_effort_command(const std::string& interface, const std::vector<double>& joint_efforts,
+    const std::vector<double>& kps, const std::vector<double>& kds) {
+
     auto config_it = interface_motor_config_.find(interface);
     if (config_it == interface_motor_config_.end()) {
         return false;
     }
-    
+
     try {
         const auto& motor_ids = config_it->second;
-        for (size_t i = 0; i < motor_ids.size(); ++i) {
-            float effort = (i < joint_efforts.size()) ? static_cast<float>(joint_efforts[i]) : 0.0f;
-            control_motor_in_effort_mode(interface, motor_ids[i], effort);
+
+        // 验证输入向量长度
+        if (joint_efforts.empty()) {
+            return false;
         }
+
+        // kps 和 kds 可以为空（使用默认值）或与 motor_ids 长度一致
+        size_t expected_size = motor_ids.size();
+        if (!kps.empty() && kps.size() != expected_size) {
+            return false;
+        }
+        if (!kds.empty() && kds.size() != expected_size) {
+            return false;
+        }
+
+        // 转换为 float 向量
+        std::vector<float> efforts;
+        std::vector<float> kps_float;
+        std::vector<float> kds_float;
+
+        efforts.reserve(expected_size);
+        kps_float.reserve(expected_size);
+        kds_float.reserve(expected_size);
+
+        for (size_t i = 0; i < expected_size; ++i) {
+            efforts.push_back(i < joint_efforts.size() ? static_cast<float>(joint_efforts[i]) : 0.0f);
+            kps_float.push_back(!kps.empty() ? static_cast<float>(kps[i]) : 0.0f);
+            kds_float.push_back(!kds.empty() ? static_cast<float>(kds[i]) : 0.0f);
+        }
+
+        // 使用批量控制接口
+        motor_driver_->send_effort_cmd_all(interface, efforts, kps_float, kds_float);
         return true;
     } catch (const std::exception&) {
         return false;
     }
 }
 
-bool RobotHardware::send_realtime_mit_command(const std::string& interface, const std::vector<double>& joint_positions, const std::vector<double>& joint_velocities, const std::vector<double>& joint_efforts) {
+bool RobotHardware::send_realtime_mit_command(const std::string& interface, const std::vector<double>& joint_positions,
+                                              const std::vector<double>& joint_velocities, const std::vector<double>& joint_efforts,
+                                              const std::vector<double>& kps, const std::vector<double>& kds) {
+
     auto config_it = interface_motor_config_.find(interface);
     if (config_it == interface_motor_config_.end()) {
         return false;
     }
-    
+
     try {
         const auto& motor_ids = config_it->second;
-        for (size_t i = 0; i < motor_ids.size(); ++i) {
-            float position = (i < joint_positions.size()) ? static_cast<float>(joint_positions[i]) : 0.0f;
-            float velocity = (i < joint_velocities.size()) ? static_cast<float>(joint_velocities[i]) : 0.0f;
-            float effort = (i < joint_efforts.size()) ? static_cast<float>(joint_efforts[i]) : 0.0f;
-            control_motor_in_mit_mode(interface, motor_ids[i], position, velocity, effort);
+
+        // 验证输入向量长度
+        if (joint_positions.empty() || joint_velocities.empty() || joint_efforts.empty()) {
+            return false;
         }
+
+        // kps 和 kds 可以为空（使用默认值）或与 motor_ids 长度一致
+        size_t expected_size = motor_ids.size();
+        if (!kps.empty() && kps.size() != expected_size) {
+            return false;
+        }
+        if (!kds.empty() && kds.size() != expected_size) {
+            return false;
+        }
+
+        // 转换为 float 向量
+        std::vector<float> positions;
+        std::vector<float> velocities;
+        std::vector<float> efforts;
+        std::vector<float> kps_float;
+        std::vector<float> kds_float;
+
+        positions.reserve(expected_size);
+        velocities.reserve(expected_size);
+        efforts.reserve(expected_size);
+        kps_float.reserve(expected_size);
+        kds_float.reserve(expected_size);
+
+        for (size_t i = 0; i < expected_size; ++i) {
+            positions.push_back(i < joint_positions.size() ? static_cast<float>(joint_positions[i]) : 0.0f);
+            velocities.push_back(i < joint_velocities.size() ? static_cast<float>(joint_velocities[i]) : 0.0f);
+            efforts.push_back(i < joint_efforts.size() ? static_cast<float>(joint_efforts[i]) : 0.0f);
+            kps_float.push_back(!kps.empty() ? static_cast<float>(kps[i]) : 0.0f);
+            kds_float.push_back(!kds.empty() ? static_cast<float>(kds[i]) : 0.0f);
+        }
+
+        // 使用批量控制接口
+        motor_driver_->send_mit_cmd_all(interface, positions, velocities, efforts, kps_float, kds_float);
         return true;
     } catch (const std::exception&) {
         return false;
@@ -438,22 +567,29 @@ bool RobotHardware::execute_trajectory(const std::string& interface, const Traje
         // 执行轨迹，不添加任何延时
         for (size_t point_idx = 0; point_idx < trajectory.points.size(); ++point_idx) {
             const auto& point = trajectory.points[point_idx];
-            
+
             // 计算目标时间并等待
             auto target_time = start_time + std::chrono::duration<double>(point.time_from_start);
             auto current_time = std::chrono::steady_clock::now();
-            
+
             // 如果还没到时间，就等待
             if (current_time < target_time) {
                 std::this_thread::sleep_until(target_time);
             }
-            
-            // 发送控制命令到每个电机
-            for (size_t i = 0; i < motor_ids.size() && i < point.positions.size(); ++i) {
-                float position = static_cast<float>(point.positions[i]);
-                control_motor_in_position_mode(interface, motor_ids[i], position);
+
+            // 使用批量控制发送所有电机的位置命令
+            std::vector<float> positions;
+            positions.reserve(motor_ids.size());
+
+            for (size_t i = 0; i < motor_ids.size(); ++i) {
+                float position = (i < point.positions.size()) ? static_cast<float>(point.positions[i]) : 0.0f;
+                positions.push_back(position);
             }
-            
+
+            // 调用批量位置控制接口（kps 和 kds 为空，使用默认值）
+            motor_driver_->send_position_cmd_all(interface, positions,
+                                               std::vector<float>(), std::vector<float>());
+
             // 更新进度（供进度条线程使用）
             current_point.store(point_idx + 1);
         }

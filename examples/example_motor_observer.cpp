@@ -48,7 +48,7 @@ int main() {
     
     // 配置电机接口和ID映射
     std::map<std::string, std::vector<uint32_t>> motor_config = {
-        {"can0", {1, 2, 3, 4, 5, 6}}    // can0 接口上的电机 1 和 9
+        {"can0", {1}}    // can0 接口上的电机 1 和 9
     };
     
     // 使用工厂函数创建CANFD电机驱动
@@ -65,11 +65,11 @@ int main() {
         
         // 测试电机
         uint32_t test_motor1 = motor_config["can0"][0];  // 电机1
-        uint32_t test_motor2 = motor_config["can0"][1];  // 电机9
-        uint32_t test_motor3 = motor_config["can0"][2];
-        uint32_t test_motor4 = motor_config["can0"][3];
-        uint32_t test_motor5 = motor_config["can0"][4];
-        uint32_t test_motor6 = motor_config["can0"][5];
+        // uint32_t test_motor2 = motor_config["can0"][1];  // 电机9
+        // uint32_t test_motor3 = motor_config["can0"][2];
+        // uint32_t test_motor4 = motor_config["can0"][3];
+        // uint32_t test_motor5 = motor_config["can0"][4];
+        // uint32_t test_motor6 = motor_config["can0"][5];
         
         std::cout << "\n=== 步骤1: 速度控制测试 ===" << std::endl;
         std::cout << "按Enter开始速度控制测试...";
@@ -77,8 +77,8 @@ int main() {
         // std::cin.get();
         // robot->resume_status_monitoring(); // 恢复状态输出
         
-        std::cout << "速度控制：电机" << test_motor1 << "和" << test_motor2 << " -> 5 度/秒..." << std::endl;
-        // robot->control_motor_in_velocity_mode("can0", test_motor1, 5.0);
+        std::cout << "速度控制：电机" << test_motor1 << " -> 5 度/秒..." << std::endl;
+        robot->control_motor_in_velocity_mode("can0", test_motor1, 5.0);
         // robot->control_motor_in_velocity_mode("can0", test_motor2, 5.0);
         // robot->control_motor_in_velocity_mode("can0", test_motor3, 5.0);
         // robot->control_motor_in_velocity_mode("can0", test_motor4, 5.0);
@@ -101,11 +101,11 @@ int main() {
         // robot->control_motor_in_velocity_mode("can0", test_motor6, 0.0);
         std::this_thread::sleep_for(std::chrono::seconds(1));
         robot->disable_motor("can0", test_motor1);
-        robot->disable_motor("can0", test_motor2);
-        robot->disable_motor("can0", test_motor3);
-        robot->disable_motor("can0", test_motor4);
-        robot->disable_motor("can0", test_motor5);
-        robot->disable_motor("can0", test_motor6);
+        // robot->disable_motor("can0", test_motor2);
+        // robot->disable_motor("can0", test_motor3);
+        // robot->disable_motor("can0", test_motor4);
+        // robot->disable_motor("can0", test_motor5);
+        // robot->disable_motor("can0", test_motor6);
         std::this_thread::sleep_for(std::chrono::seconds(1));
         
         std::cout << "\n=== 步骤3: 位置控制测试 ===" << std::endl;
@@ -116,11 +116,11 @@ int main() {
         
         std::cout << "位置控制：转到 90 度..." << std::endl;
         robot->control_motor_in_position_mode("can0", test_motor1, 90.0);
-        robot->control_motor_in_position_mode("can0", test_motor2, 90.0);
-        robot->control_motor_in_position_mode("can0", test_motor3, 90.0);
-        robot->control_motor_in_position_mode("can0", test_motor4, 90.0);
-        robot->control_motor_in_position_mode("can0", test_motor5, 90.0);
-        robot->control_motor_in_position_mode("can0", test_motor6, 90.0);
+        // robot->control_motor_in_position_mode("can0", test_motor2, 90.0);
+        // robot->control_motor_in_position_mode("can0", test_motor3, 90.0);
+        // robot->control_motor_in_position_mode("can0", test_motor4, 90.0);
+        // robot->control_motor_in_position_mode("can0", test_motor5, 90.0);
+        // robot->control_motor_in_position_mode("can0", test_motor6, 90.0);
         std::this_thread::sleep_for(std::chrono::seconds(5));
         
         std::cout << "\n=== 步骤4: 回零位置 ===" << std::endl;
@@ -130,11 +130,11 @@ int main() {
         robot->resume_status_monitoring();
         
         robot->control_motor_in_position_mode("can0", test_motor1, 0.0);
-        robot->control_motor_in_position_mode("can0", test_motor2, 0.0);
-        robot->control_motor_in_position_mode("can0", test_motor3, 0.0);
-        robot->control_motor_in_position_mode("can0", test_motor4, 0.0);
-        robot->control_motor_in_position_mode("can0", test_motor5, 0.0);
-        robot->control_motor_in_position_mode("can0", test_motor6, 0.0);
+        // robot->control_motor_in_position_mode("can0", test_motor2, 0.0);
+        // robot->control_motor_in_position_mode("can0", test_motor3, 0.0);
+        // robot->control_motor_in_position_mode("can0", test_motor4, 0.0);
+        // robot->control_motor_in_position_mode("can0", test_motor5, 0.0);
+        // robot->control_motor_in_position_mode("can0", test_motor6, 0.0);
         std::this_thread::sleep_for(std::chrono::seconds(5));
         
         std::cout << "\n=== 步骤5: 失能电机 ===" << std::endl;
@@ -145,11 +145,11 @@ int main() {
         
         std::cout << "失能电机..." << std::endl;
         robot->disable_motor("can0", test_motor1);
-        robot->disable_motor("can0", test_motor2);
-        robot->disable_motor("can0", test_motor3);
-        robot->disable_motor("can0", test_motor4);
-        robot->disable_motor("can0", test_motor5);
-        robot->disable_motor("can0", test_motor6);
+        // robot->disable_motor("can0", test_motor2);
+        // robot->disable_motor("can0", test_motor3);
+        // robot->disable_motor("can0", test_motor4);
+        // robot->disable_motor("can0", test_motor5);
+        // robot->disable_motor("can0", test_motor6);
         std::this_thread::sleep_for(std::chrono::seconds(1));
         
         std::cout << "\n观察者测试完成！" << std::endl;

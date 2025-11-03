@@ -12,6 +12,7 @@
  * @copyright   Copyright (c) 2025 Raysense Technology. All rights reserved.
  * 
  * @history     2025-07-22 Kaiyue Ding 创建文件，定义基本协议结构。
+ *              2025-11-03 Kaiyue Ding 修改协议结构，适配关节模组v0.0.1.5协议
  *********************************************************************/
 
 #ifndef __HARDWARE_DRIVER_MOTOR_PROTOCOL_HPP__
@@ -142,10 +143,18 @@ std::optional<MotorFeedback> parse_canfd_feedback(const bus::GenericBusPacket& p
 std::optional<MotorFeedback> parse_ethercat_feedback(const bus::GenericBusPacket& /*packet*/);
 
 /**
- * @brief 打包禁用电机命令，电机工作在禁用模式
+ * @brief 打包禁用电机命令，电机工作在失能模式
  * @return bool 返回是否成功打包
  */
-bool pack_disable_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size_t& len);
+bool pack_disable_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size_t& len,
+    uint8_t mode);
+
+/**
+ * @brief 打包批量禁用电机命令，电机工作在失能模式, 指定所有电机是同一个工作模式
+ * @return bool 返回是否成功打包
+ */
+bool pack_disable_all_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size_t& len,
+    std::vector<uint8_t> disable_flags, uint8_t mode);
 
 /**
  * @brief 打包启用电机命令，电机工作在指定模式
@@ -155,31 +164,26 @@ bool pack_enable_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size
     uint8_t mode);
 
 /**
- * @brief 打包MIT控制命令，电机工作在MIT模式打包函数只负责填充data和len
+ * @brief 打包批量启用电机命令，电机工作在指定模式, 指定所有电机是同一个工作模式
  * @return bool 返回是否成功打包
  */
-bool pack_mit_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size_t& len, 
-                        float position, float velocity, float effort);
-/**
- * @brief 打包位置控制命令，电机工作在绝对位置模式（可改为相对位置模式）
- * @return bool 返回是否成功打包
- */
-bool pack_position_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size_t& len,
-                            float position);
+bool pack_enable_all_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size_t& len,
+    std::vector<uint8_t> enable_flags, uint8_t mode);
 
 /**
- * @brief 打包速度控制命令，电机工作在速度模式
+ * @brief 打包控制命令，电机工作的控制打包函数只负责填充data和len
  * @return bool 返回是否成功打包
  */
-bool pack_velocity_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size_t& len,
-                            float velocity);
+bool pack_control_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size_t& len,
+    float position, float velocity, float effort, float kp, float kd);
 
 /**
- * @brief 打包力矩控制命令，电机工作在力矩模式
+ * @brief 打包批量控制命令，电机工作的控制打包函数只负责填充data和len
  * @return bool 返回是否成功打包
  */
-bool pack_effort_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size_t& len,
-                            float effort);
+bool pack_control_all_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size_t& len,
+    const std::vector<float>& positions, const std::vector<float>& velocities,
+    const std::vector<float>& efforts, const std::vector<float>& kps, const std::vector<float>& kds);
 
 /**
  * @brief 打包参数读取命令，读取电机参数
@@ -212,7 +216,7 @@ bool pack_motor_feedback_request(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& da
  * @brief 打包反馈请求命令，请求所有电机反馈
  * @return bool 返回是否成功打包
  */
-bool pack_motor_feedback_request_all(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& /*data*/, size_t& len);
+bool pack_motor_feedback_request_all(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size_t& len);
 
 }   // namespace motor_protocol
 }   // namespace hardware_driver
