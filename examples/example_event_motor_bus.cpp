@@ -190,8 +190,8 @@ int main() {
         robot->control_motor_in_velocity_mode("can0", test_motor1, 0.0);
         robot->control_motor_in_velocity_mode("can0", test_motor2, 0.0);
         std::this_thread::sleep_for(std::chrono::seconds(1));
-        robot->disable_motor("can0", test_motor1);
-        robot->disable_motor("can0", test_motor2);
+        robot->disable_motor("can0", test_motor1, 4);
+        robot->disable_motor("can0", test_motor2, 4);
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         std::cout << "\n=== 步骤5: 位置控制测试 ===" << std::endl;
@@ -223,8 +223,8 @@ int main() {
         robot->resume_status_monitoring();
         
         std::cout << "失能电机..." << std::endl;
-        robot->disable_motor("can0", test_motor1);
-        robot->disable_motor("can0", test_motor2);
+        robot->disable_motor("can0", test_motor1, 4);
+        robot->disable_motor("can0", test_motor2, 4);
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
         
         std::cout << "\n✅ 事件总线电机控制测试完成!" << std::endl;

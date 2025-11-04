@@ -80,7 +80,7 @@ int main() {
         std::cin.get();
         robot->resume_status_monitoring(); // 恢复状态输出
         for (uint32_t motor_id : arm_motors) {
-            robot->disable_motor("can0", motor_id);
+            robot->disable_motor("can0", motor_id, 4);
         }
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
@@ -122,7 +122,7 @@ int main() {
         
         std::cout << "\n步骤5: 失能电机" << std::endl;
         for (uint32_t motor_id : arm_motors) {
-            robot->disable_motor("can0", motor_id);
+            robot->disable_motor("can0", motor_id, 4);
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
         

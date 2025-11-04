@@ -100,7 +100,7 @@ int main() {
         // robot->control_motor_in_velocity_mode("can0", test_motor5, 0.0);
         // robot->control_motor_in_velocity_mode("can0", test_motor6, 0.0);
         std::this_thread::sleep_for(std::chrono::seconds(1));
-        robot->disable_motor("can0", test_motor1);
+        robot->disable_motor("can0", test_motor1, 4);
         // robot->disable_motor("can0", test_motor2);
         // robot->disable_motor("can0", test_motor3);
         // robot->disable_motor("can0", test_motor4);
@@ -144,7 +144,7 @@ int main() {
         robot->resume_status_monitoring();
         
         std::cout << "失能电机..." << std::endl;
-        robot->disable_motor("can0", test_motor1);
+        robot->disable_motor("can0", test_motor1, 4);
         // robot->disable_motor("can0", test_motor2);
         // robot->disable_motor("can0", test_motor3);
         // robot->disable_motor("can0", test_motor4);

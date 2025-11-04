@@ -101,8 +101,8 @@ public:
     std::shared_ptr<event::EventBus> get_event_bus() const;
     ~MotorDriverImpl() override;
 
-    void disable_motor(const std::string interface, const uint32_t motor_id) override;
-    void disable_all_motors(const std::string interface, std::vector<uint32_t> motor_ids) override;
+    void disable_motor(const std::string interface, const uint32_t motor_id, uint8_t mode) override;
+    void disable_all_motors(const std::string interface, std::vector<uint32_t> motor_ids, uint8_t mode) override;
     void enable_motor(const std::string interface, const uint32_t motor_id, uint8_t mode) override;
     void enable_all_motors(const std::string interface, std::vector<uint32_t> motor_ids, uint8_t mode) override;
     void send_mit_cmd(const std::string interface, const uint32_t motor_id, float position, float velocity, float effort, 
@@ -121,16 +121,16 @@ public:
     void motor_parameter_write(const std::string interface, const uint32_t motor_id, uint16_t address, float value) override;
     void motor_function_operation(const std::string interface, const uint32_t motor_id, uint8_t operation) override;
 
-    // 批量控制接口（广播给所有电机）
-    void send_position_cmd_all(const std::string interface, const std::vector<float>& positions,
-                              const std::vector<float>& kps, const std::vector<float>& kds) override;
-    void send_velocity_cmd_all(const std::string interface, const std::vector<float>& velocities,
-                              const std::vector<float>& kps, const std::vector<float>& kds) override;
-    void send_effort_cmd_all(const std::string interface, const std::vector<float>& efforts,
-                            const std::vector<float>& kps, const std::vector<float>& kds) override;
-    void send_mit_cmd_all(const std::string interface, const std::vector<float>& positions,
-                         const std::vector<float>& velocities, const std::vector<float>& efforts,
-                         const std::vector<float>& kps, const std::vector<float>& kds) override;
+    // 批量控制接口（广播给所有电机，支持最多 6 个）
+    void send_position_cmd_all(const std::string interface, const std::array<float, 6>& positions,
+                              const std::array<float, 6>& kps, const std::array<float, 6>& kds) override;
+    void send_velocity_cmd_all(const std::string interface, const std::array<float, 6>& velocities,
+                              const std::array<float, 6>& kps, const std::array<float, 6>& kds) override;
+    void send_effort_cmd_all(const std::string interface, const std::array<float, 6>& efforts,
+                            const std::array<float, 6>& kps, const std::array<float, 6>& kds) override;
+    void send_mit_cmd_all(const std::string interface, const std::array<float, 6>& positions,
+                         const std::array<float, 6>& velocities, const std::array<float, 6>& efforts,
+                         const std::array<float, 6>& kps, const std::array<float, 6>& kds) override;
 
     // IAP固件更新接口
     /**

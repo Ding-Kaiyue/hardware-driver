@@ -71,8 +71,8 @@ int main() {
         
         // 实际的电机控制流程
         std::cout << "\n步骤1: 使能电机 1 和 9" << std::endl;
-        // robot->enable_motor("can0", 1, 4);  // 模式4
-        // robot->enable_motor("can0", 9, 4);  // 模式4
+        robot->enable_motor("can0", 1, 4);  // 模式4
+        robot->enable_motor("can0", 9, 4);  // 模式4
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
         
         std::cout << "\n步骤2: 速度控制测试" << std::endl;
@@ -94,8 +94,8 @@ int main() {
         robot->control_motor_in_velocity_mode("can0", motor_config["can0"][0], 0.0);
         robot->control_motor_in_velocity_mode("can0", motor_config["can0"][1], 0.0);
         std::this_thread::sleep_for(std::chrono::seconds(1));
-        robot->disable_motor("can0", motor_config["can0"][0]);
-        robot->disable_motor("can0", motor_config["can0"][1]);
+        robot->disable_motor("can0", motor_config["can0"][0], 4);
+        robot->disable_motor("can0", motor_config["can0"][1], 4);
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         std::cout << "\n步骤4: 位置控制测试，电机1: 90°, 电机9: -45°" << std::endl;
@@ -121,8 +121,8 @@ int main() {
         robot->pause_status_monitoring();
         std::cin.get();
         robot->resume_status_monitoring();
-        robot->disable_motor("can0", motor_config["can0"][0]);
-        robot->disable_motor("can0", motor_config["can0"][1]);
+        robot->disable_motor("can0", motor_config["can0"][0], 4);
+        robot->disable_motor("can0", motor_config["can0"][1], 4);
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
         
         std::cout << "\n✅ 电机控制回调模式测试完成!" << std::endl;

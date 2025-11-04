@@ -40,7 +40,7 @@ public:
 // ========== 主程序入口 ==========
 int main() {
     std::map<std::string, std::vector<uint32_t>> motor_config = {
-        {"can0", {1}}    // can0 接口上的电机 1
+        {"can0", {6}}    // can0 接口上的电机 2
     };
 
     auto motor_driver = hardware_driver::createCanFdMotorDriver({"can0"});
@@ -48,7 +48,7 @@ int main() {
     auto robot = std::make_shared<RobotHardware>(motor_driver, motor_config, iap_observer);
 
     std::cout << "====== IAP Firmware Update Test ======" << std::endl;
-    robot->start_update("can0", 1, "../../update_files/9NM.bin");
+    robot->start_update("can0", motor_config["can0"][0], "../../update_files/51NM.bin");
     std::cout << "====== IAP Firmware Update Test End ======" << std::endl;
 
     return 0;

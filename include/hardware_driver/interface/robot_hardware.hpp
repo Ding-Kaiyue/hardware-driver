@@ -14,6 +14,7 @@
 #include <functional>
 
 #include <chrono>
+#include <array>
 #include "hardware_driver/driver/motor_driver_interface.hpp"
 #include "hardware_driver/event/event_bus.hpp"
 
@@ -93,15 +94,34 @@ public:
     void control_motor_in_position_mode(const std::string& interface, const uint32_t motor_id, float position, float kp = 0.0, float kd = 0.0);
     void control_motor_in_velocity_mode(const std::string& interface, const uint32_t motor_id, float velocity, float kp = 0.0, float kd = 0.0);
     void control_motor_in_effort_mode(const std::string& interface, const uint32_t motor_id, float effort, float kp = 0.0, float kd = 0.0);
-    void disable_motor(const std::string& interface, const uint32_t motor_id);
+    void disable_motor(const std::string& interface, const uint32_t motor_id, uint8_t mode);
     void enable_motor(const std::string& interface, const uint32_t motor_id, uint8_t mode);
     
-    // ========== 实时批量控制接口 ==========
-    bool send_realtime_velocity_command(const std::string& interface, const std::vector<double>& joint_velocities, const std::vector<double>& kps = {0.0}, const std::vector<double>& kds = {0.0});
-    bool send_realtime_position_command(const std::string& interface, const std::vector<double>& joint_positions, const std::vector<double>& kps = {0.0}, const std::vector<double>& kds = {0.0});
-    bool send_realtime_effort_command(const std::string& interface, const std::vector<double>& joint_efforts, const std::vector<double>& kps = {0.0}, const std::vector<double>& kds= {0.0});
-    bool send_realtime_mit_command(const std::string& interface, const std::vector<double>& joint_positions, const std::vector<double>& joint_velocities, const std::vector<double>& joint_efforts,
-                                   const std::vector<double>& kps = {0.0}, const std::vector<double>& kds = {0.0});
+    // ========== 实时批量控制接口（支持最多 6 个电机） ==========
+    void disable_motors(const std::string& interface, const std::vector<uint32_t>& motor_ids, uint8_t mode);
+    void enable_motors(const std::string& interface, const std::vector<uint32_t>& motor_ids, uint8_t mode);
+    // 使用 std::array<double, 6> 避免动态分配开销
+    bool send_realtime_velocity_command(const std::string& interface,
+                                       const std::array<double, 6>& joint_velocities,
+                                       const std::array<double, 6>& kps = {},
+                                       const std::array<double, 6>& kds = {});
+
+    bool send_realtime_position_command(const std::string& interface,
+                                       const std::array<double, 6>& joint_positions,
+                                       const std::array<double, 6>& kps = {},
+                                       const std::array<double, 6>& kds = {});
+
+    bool send_realtime_effort_command(const std::string& interface,
+                                     const std::array<double, 6>& joint_efforts,
+                                     const std::array<double, 6>& kps = {},
+                                     const std::array<double, 6>& kds = {});
+
+    bool send_realtime_mit_command(const std::string& interface,
+                                  const std::array<double, 6>& joint_positions,
+                                  const std::array<double, 6>& joint_velocities,
+                                  const std::array<double, 6>& joint_efforts,
+                                  const std::array<double, 6>& kps = {},
+                                  const std::array<double, 6>& kds = {});
     
     // ========== 参数读写接口 ==========
     void motor_parameter_read(const std::string& interface, const uint32_t motor_id, uint16_t address);

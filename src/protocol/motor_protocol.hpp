@@ -178,12 +178,19 @@ bool pack_control_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, siz
     float position, float velocity, float effort, float kp, float kd);
 
 /**
- * @brief 打包批量控制命令，电机工作的控制打包函数只负责填充data和len
+ * @brief 打包批量控制命令，支持最多 6 个电机
+ * @param data CAN 数据缓冲区
+ * @param len 数据长度（输出参数）
+ * @param positions 位置数组[0..5]
+ * @param velocities 速度数组[0..5]
+ * @param efforts 力矩数组[0..5]
+ * @param kps kp 参数数组[0..5]
+ * @param kds kd 参数数组[0..5]
  * @return bool 返回是否成功打包
  */
 bool pack_control_all_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size_t& len,
-    const std::vector<float>& positions, const std::vector<float>& velocities,
-    const std::vector<float>& efforts, const std::vector<float>& kps, const std::vector<float>& kds);
+    const std::array<float, 6>& positions, const std::array<float, 6>& velocities,
+    const std::array<float, 6>& efforts, const std::array<float, 6>& kps, const std::array<float, 6>& kds);
 
 /**
  * @brief 打包参数读取命令，读取电机参数

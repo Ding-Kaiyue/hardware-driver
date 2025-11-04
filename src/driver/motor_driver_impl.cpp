@@ -176,18 +176,18 @@ void MotorDriverImpl::send_emergency_stop(const std::string& interface, uint32_t
     }
 }
 
-void MotorDriverImpl::disable_motor(const std::string interface, const uint32_t motor_id) {
+void MotorDriverImpl::disable_motor(const std::string interface, const uint32_t motor_id, uint8_t mode) {
     bus::GenericBusPacket packet;
     packet.interface = interface;
     packet.id = motor_id;  // 与其他控制命令保持一致
 
-    if (motor_protocol::pack_disable_command(packet.data, packet.len, 0x00)) {
+    if (motor_protocol::pack_disable_command(packet.data, packet.len, mode)) {
         // 失能命令使用高优先级
         send_control_command(packet, CommandPriority::HIGH);
     }
 }
 
-void MotorDriverImpl::disable_all_motors(const std::string interface, std::vector<uint32_t> motor_ids) {
+void MotorDriverImpl::disable_all_motors(const std::string interface, std::vector<uint32_t> motor_ids, uint8_t mode) {
     bus::GenericBusPacket packet;
     packet.interface = interface;
     packet.id = 0x00;  // 对所有电机发送失能命令
@@ -195,7 +195,7 @@ void MotorDriverImpl::disable_all_motors(const std::string interface, std::vecto
     std::vector<uint8_t> disable_flags;
     disable_flags.assign(motor_ids.size(), 0x00); // 全部失能
 
-    if (motor_protocol::pack_disable_all_command(packet.data, packet.len, disable_flags, 0x00)) {
+    if (motor_protocol::pack_disable_all_command(packet.data, packet.len, disable_flags, mode)) {
         // 失能命令使用高优先级
         send_control_command(packet, CommandPriority::HIGH);
     }
@@ -279,7 +279,7 @@ void MotorDriverImpl::send_mit_cmd(const std::string interface, const uint32_t m
     }
 }
 
-void MotorDriverImpl::send_control_cmd(const std::string interface, 
+void MotorDriverImpl::send_control_cmd(const std::string interface,
     std::vector<float> positions, std::vector<float> velocities, std::vector<float> efforts,
     std::vector<float> kps, std::vector<float> kds) {
 
@@ -287,8 +287,31 @@ void MotorDriverImpl::send_control_cmd(const std::string interface,
     packet.interface = interface;
     packet.id = 0x00;  // 广播给所有电机
 
+    // 转换 vector 为 std::array<float, 6>
+    std::array<float, 6> pos_arr = {};
+    std::array<float, 6> vel_arr = {};
+    std::array<float, 6> eff_arr = {};
+    std::array<float, 6> kps_arr = {};
+    std::array<float, 6> kds_arr = {};
+
+    for (size_t i = 0; i < std::min(size_t(6), positions.size()); ++i) {
+        pos_arr[i] = positions[i];
+    }
+    for (size_t i = 0; i < std::min(size_t(6), velocities.size()); ++i) {
+        vel_arr[i] = velocities[i];
+    }
+    for (size_t i = 0; i < std::min(size_t(6), efforts.size()); ++i) {
+        eff_arr[i] = efforts[i];
+    }
+    for (size_t i = 0; i < std::min(size_t(6), kps.size()); ++i) {
+        kps_arr[i] = kps[i];
+    }
+    for (size_t i = 0; i < std::min(size_t(6), kds.size()); ++i) {
+        kds_arr[i] = kds[i];
+    }
+
     // 同时控制多个电机
-    if (motor_protocol::pack_control_all_command(packet.data, packet.len, positions, velocities, efforts, kps, kds)) {
+    if (motor_protocol::pack_control_all_command(packet.data, packet.len, pos_arr, vel_arr, eff_arr, kps_arr, kds_arr)) {
         send_control_command(packet);
     }
 }
@@ -918,50 +941,63 @@ std::optional<hardware_driver::iap_protocol::IAPFeedback> MotorDriverImpl::wait_
 }
 
 // ========== 批量控制接口实现 ==========
-void MotorDriverImpl::send_position_cmd_all(const std::string interface, const std::vector<float>& positions,
-                                          const std::vector<float>& kps, const std::vector<float>& kds) {
+void MotorDriverImpl::send_position_cmd_all(const std::string interface,
+                                          const std::array<float, 6>& positions,
+                                          const std::array<float, 6>& kps,
+                                          const std::array<float, 6>& kds) {
     bus::GenericBusPacket packet;
     packet.interface = interface;
     packet.id = 0x000;  // 批量控制使用广播ID
 
-    if (motor_protocol::pack_control_all_command(packet.data, packet.len, positions,
-                                                 std::vector<float>(positions.size(), 0.0f),
-                                                 std::vector<float>(positions.size(), 0.0f), kps, kds)) {
+    // 位置控制时速度和力矩为 0
+    std::array<float, 6> velocities = {};
+    std::array<float, 6> efforts = {};
+
+    if (motor_protocol::pack_control_all_command(packet.data, packet.len, positions, velocities, efforts, kps, kds)) {
         send_control_command(packet);
     }
 }
 
-void MotorDriverImpl::send_velocity_cmd_all(const std::string interface, const std::vector<float>& velocities,
-                                          const std::vector<float>& kps, const std::vector<float>& kds) {
+void MotorDriverImpl::send_velocity_cmd_all(const std::string interface,
+                                          const std::array<float, 6>& velocities,
+                                          const std::array<float, 6>& kps,
+                                          const std::array<float, 6>& kds) {
     bus::GenericBusPacket packet;
     packet.interface = interface;
     packet.id = 0x000;  // 批量控制使用广播ID
 
-    if (motor_protocol::pack_control_all_command(packet.data, packet.len,
-                                                 std::vector<float>(velocities.size(), 0.0f),
-                                                 velocities,
-                                                 std::vector<float>(velocities.size(), 0.0f), kps, kds)) {
+    // 速度控制时位置和力矩为 0
+    std::array<float, 6> positions = {};
+    std::array<float, 6> efforts = {};
+
+    if (motor_protocol::pack_control_all_command(packet.data, packet.len, positions, velocities, efforts, kps, kds)) {
         send_control_command(packet);
     }
 }
 
-void MotorDriverImpl::send_effort_cmd_all(const std::string interface, const std::vector<float>& efforts,
-                                        const std::vector<float>& kps, const std::vector<float>& kds) {
+void MotorDriverImpl::send_effort_cmd_all(const std::string interface,
+                                        const std::array<float, 6>& efforts,
+                                        const std::array<float, 6>& kps,
+                                        const std::array<float, 6>& kds) {
     bus::GenericBusPacket packet;
     packet.interface = interface;
     packet.id = 0x000;  // 批量控制使用广播ID
 
-    if (motor_protocol::pack_control_all_command(packet.data, packet.len,
-                                                 std::vector<float>(efforts.size(), 0.0f),
-                                                 std::vector<float>(efforts.size(), 0.0f),
-                                                 efforts, kps, kds)) {
+    // 力矩控制时位置和速度为 0
+    std::array<float, 6> positions = {};
+    std::array<float, 6> velocities = {};
+
+    if (motor_protocol::pack_control_all_command(packet.data, packet.len, positions, velocities, efforts, kps, kds)) {
         send_control_command(packet);
     }
 }
 
-void MotorDriverImpl::send_mit_cmd_all(const std::string interface, const std::vector<float>& positions,
-                                     const std::vector<float>& velocities, const std::vector<float>& efforts,
-                                     const std::vector<float>& kps, const std::vector<float>& kds) {
+void MotorDriverImpl::send_mit_cmd_all(const std::string interface,
+                                     const std::array<float, 6>& positions,
+                                     const std::array<float, 6>& velocities,
+                                     const std::array<float, 6>& efforts,
+                                     const std::array<float, 6>& kps,
+                                     const std::array<float, 6>& kds) {
     bus::GenericBusPacket packet;
     packet.interface = interface;
     packet.id = 0x000;  // 批量控制使用广播ID

@@ -209,15 +209,11 @@ bool pack_control_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, siz
 }
 
 bool pack_control_all_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size_t& len,
-    const std::vector<float>& positions, const std::vector<float>& velocities,
-    const std::vector<float>& efforts, const std::vector<float>& kps, const std::vector<float>& kds)
+    const std::array<float, 6>& positions, const std::array<float, 6>& velocities,
+    const std::array<float, 6>& efforts, const std::array<float, 6>& kps, const std::array<float, 6>& kds)
 {
-    // 验证所有向量大小一致
-    size_t motor_count = positions.size();
-    if (velocities.size() != motor_count || efforts.size() != motor_count ||
-        kps.size() != motor_count || kds.size() != motor_count) {
-        return false;
-    }
+    // 固定 6 个电机的批量控制
+    const size_t motor_count = 6;
 
     // 第1位：数据长度 = 每个电机8字节 * 电机数 + 1（0x03标识）
     data[0] = motor_count * 8 + 1;
