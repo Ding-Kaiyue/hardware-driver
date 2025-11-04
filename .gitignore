@@ -52,3 +52,6 @@ Thumbs.db
 build_*.sh
 create_release_package.sh
 create_debian_package.sh
+
+# pdf文档
+bootloader.pdf

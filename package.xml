@@ -2,7 +2,7 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>hardware_driver</name>
-  <version>2.1.0</version>
+  <version>3.0.0</version>
   <description>Modern event-driven hardware driver library for high-performance motor control and state monitoring. ROS 2 compatible but fully independent.</description>
   <maintainer email="d570737261@163.com">dyk</maintainer>
   <license>MIT</license>

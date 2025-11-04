@@ -60,7 +60,7 @@ target_include_directories(hardware_driver_canfd
 
 # 设置库的版本信息
 set_target_properties(hardware_driver_canfd PROPERTIES
-  VERSION 2.1.0
+  VERSION 3.0.0
   SOVERSION 2
   OUTPUT_NAME "hardware_driver"
 )
@@ -132,7 +132,7 @@ install(TARGETS
 include(CMakePackageConfigHelpers)
 write_basic_package_version_file(
   "${CMAKE_CURRENT_BINARY_DIR}/hardware_driverConfigVersion.cmake"
-  VERSION 2.1.0
+  VERSION 3.0.0
   COMPATIBILITY AnyNewerVersion
 )
 

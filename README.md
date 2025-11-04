@@ -32,18 +32,18 @@ sudo ldconfig
 
 ### 方法二：发布包安装
 ```bash
-wget https://github.com/Ding-Kaiyue/hardware-driver/releases/download/v2.0.0-release/hardware_driver_v2.0.0.tar.gz
-tar -xzvf hardware_driver_v2.0.0.tar.gz
+wget https://github.com/Ding-Kaiyue/hardware-driver/releases/download/v3.0.0-release/hardware_driver_v3.0.0.tar.gz
+tar -xzvf hardware_driver_v3.0.0.tar.gz
 cd hardware-driver
 sudo ./install.sh
 ```
 
 ### 方法三：Debian包安装
 ```bash
-wget https://github.com/Ding-Kaiyue/hardware-driver/releases/download/v2.0.0-release/libhardware-driver0_2.0.0-1_amd64.deb
-wget https://github.com/Ding-Kaiyue/hardware-driver/releases/download/v2.0.0-release/libhardware-driver-dev_2.0.0-1_amd64.deb
-sudo dpkg -i libhardware-driver0_2.0.0-1_amd64.deb
-sudo dpkg -i libhardware-driver-dev_2.0.0-1_amd64.deb
+wget https://github.com/Ding-Kaiyue/hardware-driver/releases/download/v3.0.0-release/libhardware-driver0_3.0.0-1_amd64.deb
+wget https://github.com/Ding-Kaiyue/hardware-driver/releases/download/v3.0.0-release/libhardware-driver-dev_3.0.0-1_amd64.deb
+sudo dpkg -i libhardware-driver0_3.0.0-1_amd64.deb
+sudo dpkg -i libhardware-driver-dev_3.0.0-1_amd64.deb
 sudo apt-get install -f
 ```
 
