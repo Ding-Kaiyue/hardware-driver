@@ -9,87 +9,62 @@
 #include <thread>
 #include <atomic>
 #include <mutex>
+#include <array>
 #include "hardware_driver/interface/robot_hardware.hpp"
 #include "hardware_driver/driver/motor_driver_interface.hpp"
 #include "hardware_driver/event/event_bus.hpp"
 #include "hardware_driver/event/motor_events.hpp"
-#include "driver/motor_driver_impl.hpp"
-#include "bus/canfd_bus_impl.hpp"
 
-#define CAN0_ENABLE
+// ==================== 类型别名简化 ====================
+using MotorConfig = std::map<std::string, std::vector<uint32_t>>;
 
-// 简单的Mock MotorDriverInterface用于测试
+// ==================== Mock 电机驱动器 ====================
+
 class MockMotorDriver : public hardware_driver::motor_driver::MotorDriverInterface {
 public:
-    MOCK_METHOD(void, enable_motor, (const std::string interface, const uint32_t motor_id, uint8_t mode), (override));
-    MOCK_METHOD(void, send_position_cmd, (const std::string interface, const uint32_t motor_id, float position), (override));
-    MOCK_METHOD(void, send_velocity_cmd, (const std::string interface, const uint32_t motor_id, float velocity), (override));
-    MOCK_METHOD(void, send_effort_cmd, (const std::string interface, const uint32_t motor_id, float effort), (override));
-    MOCK_METHOD(void, send_mit_cmd, (const std::string interface, const uint32_t motor_id, float position, float velocity, float effort), (override));
-    MOCK_METHOD(void, disable_motor, (const std::string interface, const uint32_t motor_id), (override));
-    MOCK_METHOD(void, motor_parameter_read, (const std::string interface, const uint32_t motor_id, uint16_t address), (override));
-    MOCK_METHOD(void, motor_parameter_write, (const std::string interface, const uint32_t motor_id, uint16_t address, int32_t value), (override));
-    MOCK_METHOD(void, motor_parameter_write, (const std::string interface, const uint32_t motor_id, uint16_t address, float value), (override));
-    MOCK_METHOD(void, motor_function_operation, (const std::string interface, const uint32_t motor_id, uint8_t operation), (override));
+    MOCK_METHOD(void, enable_motor, (const std::string, const uint32_t, uint8_t), (override));
+    MOCK_METHOD(void, enable_all_motors, (const std::string, std::vector<uint32_t>, uint8_t), (override));
+    MOCK_METHOD(void, disable_motor, (const std::string, const uint32_t, uint8_t), (override));
+    MOCK_METHOD(void, disable_all_motors, (const std::string, std::vector<uint32_t>, uint8_t), (override));
+    MOCK_METHOD(void, send_position_cmd, (const std::string, const uint32_t, float, float, float), (override));
+    MOCK_METHOD(void, send_velocity_cmd, (const std::string, const uint32_t, float, float, float), (override));
+    MOCK_METHOD(void, send_effort_cmd, (const std::string, const uint32_t, float, float, float), (override));
+    MOCK_METHOD(void, send_mit_cmd, (const std::string, const uint32_t, float, float, float, float, float), (override));
+    MOCK_METHOD(void, send_control_cmd, (const std::string, std::vector<float>, std::vector<float>, std::vector<float>, std::vector<float>, std::vector<float>), (override));
+    MOCK_METHOD(void, motor_function_operation, (const std::string, const uint32_t, uint8_t), (override));
+    MOCK_METHOD(void, motor_parameter_read, (const std::string, const uint32_t, uint16_t), (override));
+    MOCK_METHOD(void, motor_parameter_write, (const std::string, const uint32_t, uint16_t, int32_t), (override));
+    MOCK_METHOD(void, motor_parameter_write, (const std::string, const uint32_t, uint16_t, float), (override));
+    MOCK_METHOD(void, start_update, (const std::string&, uint32_t, const std::string&), (override));
+
+    // Implement array/all operations with default implementations
+    void send_position_cmd_all(const std::string, const std::array<float, 6>&, const std::array<float, 6>&, const std::array<float, 6>&) override {}
+    void send_velocity_cmd_all(const std::string, const std::array<float, 6>&, const std::array<float, 6>&, const std::array<float, 6>&) override {}
+    void send_effort_cmd_all(const std::string, const std::array<float, 6>&, const std::array<float, 6>&, const std::array<float, 6>&) override {}
+    void send_mit_cmd_all(const std::string, const std::array<float, 6>&, const std::array<float, 6>&, const std::array<float, 6>&, const std::array<float, 6>&, const std::array<float, 6>&) override {}
 };
 
 using ::testing::_;
-using namespace hardware_driver::event;
+using ::testing::AtLeast;
+using ::testing::Return;
 
-// 测试用的电机状态观察者
-class TestMotorStatusCollector : public hardware_driver::motor_driver::MotorStatusObserver {
+// ==================== 电机状态观察者 ====================
+
+class TestMotorStatusObserver : public hardware_driver::motor_driver::MotorStatusObserver {
 public:
     std::map<std::string, std::map<uint32_t, hardware_driver::motor_driver::Motor_Status>> latest_status;
     std::mutex status_mutex;
     std::atomic<int> status_received_count{0};
     std::atomic<int> batch_received_count{0};
-    
-    TestMotorStatusCollector(std::shared_ptr<EventBus> event_bus) : event_bus_(event_bus) {
-        // 只有在event_bus不为空时才订阅事件
-        if (event_bus_) {
-            // 订阅单个电机状态事件
-            motor_status_handler_ = event_bus_->subscribe<MotorStatusEvent>(
-                [this](const std::shared_ptr<MotorStatusEvent>& event) {
-                    std::lock_guard<std::mutex> lock(status_mutex);
-                    latest_status[event->get_interface()][event->get_motor_id()] = event->get_status();
-                    status_received_count++;
-                });
-                
-            // 订阅批量电机状态事件
-            batch_status_handler_ = event_bus_->subscribe<MotorBatchStatusEvent>(
-                [this](const std::shared_ptr<MotorBatchStatusEvent>& event) {
-                    std::lock_guard<std::mutex> lock(status_mutex);
-                    for (const auto& [motor_id, status] : event->get_status_all()) {
-                        latest_status[event->get_interface()][motor_id] = status;
-                    }
-                    batch_received_count++;
-                });
-        }
-    }
-    
-    ~TestMotorStatusCollector() {
-        if (event_bus_ && motor_status_handler_) {
-            event_bus_->unsubscribe<MotorStatusEvent>(motor_status_handler_);
-        }
-        if (event_bus_ && batch_status_handler_) {
-            event_bus_->unsubscribe<MotorBatchStatusEvent>(batch_status_handler_);
-        }
-    }
-    
-    // 实现 MotorStatusObserver 接口
-    void on_motor_status_update(const std::string& interface, 
-                               uint32_t motor_id, 
+
+    void on_motor_status_update(const std::string& interface,
+                               uint32_t motor_id,
                                const hardware_driver::motor_driver::Motor_Status& status) override {
         std::lock_guard<std::mutex> lock(status_mutex);
         latest_status[interface][motor_id] = status;
         status_received_count++;
-        
-        // 只有在event_bus不为空时才发布到事件总线
-        if (event_bus_) {
-            event_bus_->emit<MotorStatusEvent>(interface, motor_id, status);
-        }
     }
-    
+
     void on_motor_status_update(const std::string& interface,
                                const std::map<uint32_t, hardware_driver::motor_driver::Motor_Status>& status_all) override {
         std::lock_guard<std::mutex> lock(status_mutex);
@@ -97,174 +72,450 @@ public:
             latest_status[interface][motor_id] = status;
         }
         batch_received_count++;
-        
-        // 只有在event_bus不为空时才发布到事件总线
-        if (event_bus_) {
-            event_bus_->emit<MotorBatchStatusEvent>(interface, status_all);
-        }
     }
-    
+
     hardware_driver::motor_driver::Motor_Status get_motor_status(const std::string& interface, uint32_t motor_id) {
         std::lock_guard<std::mutex> lock(status_mutex);
         if (latest_status.find(interface) != latest_status.end() &&
             latest_status[interface].find(motor_id) != latest_status[interface].end()) {
             return latest_status[interface][motor_id];
         }
-        // 返回默认状态如果没有找到
         return hardware_driver::motor_driver::Motor_Status{};
     }
-    
-    std::map<uint32_t, hardware_driver::motor_driver::Motor_Status> get_all_motor_status(const std::string& interface) {
-        std::lock_guard<std::mutex> lock(status_mutex);
-        if (latest_status.find(interface) != latest_status.end()) {
-            return latest_status[interface];
-        }
-        return {};
-    }
-    
-private:
-    std::shared_ptr<EventBus> event_bus_;
-    std::shared_ptr<EventHandler> motor_status_handler_;
-    std::shared_ptr<EventHandler> batch_status_handler_;
 };
 
-TEST(RobotHardwareTest, VelocityAndDisable) {
-    // 检查是否有可用的CAN接口 - 只使用can0（实际有硬件连接的接口）
-    std::vector<std::string> available_interfaces;
-    std::vector<std::string> test_interfaces = {"can0"};  // 只测试can0
-    
-    for (const auto& interface : test_interfaces) {
-        try {
-            std::vector<std::string> single_interface = {interface};
-            auto test_bus = std::make_shared<hardware_driver::bus::CanFdBus>(single_interface);
-            available_interfaces.push_back(interface);
-        } catch (const std::exception& e) {
-            // 接口不可用，跳过
-        }
-    }
-    
-    if (available_interfaces.empty()) {
-        GTEST_SKIP() << "No CAN interfaces available for testing";
-    }
-    
-    // 创建CAN总线接口 - 使用可用的接口
-    auto bus = std::make_shared<hardware_driver::bus::CanFdBus>(available_interfaces);
+// ==================== RobotHardware 测试套件 ====================
 
-    // 使用真实的电机驱动
-    auto real_driver = std::make_shared<hardware_driver::motor_driver::MotorDriverImpl>(bus);
-    std::map<std::string, std::vector<uint32_t>> config;
-    
-    // 根据可用接口配置电机 - 使用实际连接的硬件配置
-    for (const auto& interface : available_interfaces) {
-        if (interface == "can0" || interface == "vcan0") {
-            config["can0"] = {1, 9};  // 实际连接的电机ID
-        }
-        // 移除can1配置，因为没有硬件连接
-    }
-    
-    // 使用简单的观察者模式，类似示例代码
-    auto status_collector = std::make_shared<TestMotorStatusCollector>(nullptr);  // 不使用事件总线
-    real_driver->add_observer(status_collector);
-    
-    // 创建RobotHardware实例，使用观察者模式构造函数
-    RobotHardware hw(real_driver, config, status_collector);
+class RobotHardwareTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        mock_driver_ = std::make_shared<MockMotorDriver>();
+        observer_ = std::make_shared<TestMotorStatusObserver>();
 
-    std::cout << "=== 速度指令和失能测试 ===" << std::endl;
-    std::cout << "可用接口: ";
-    for (const auto& interface : available_interfaces) {
-        std::cout << interface << " ";
-    }
-    std::cout << std::endl;
-    
-    // 等待系统稳定
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
-    // 根据可用接口发送速度命令 - 只对can0发送
-    for (const auto& interface : available_interfaces) {
-        std::string config_interface = (interface == "vcan0") ? "can0" : interface;
-        
-        if (config.find(config_interface) != config.end() && !config[config_interface].empty()) {
-            std::cout << "发送" << config_interface << " 速度命令 (50.0 degrees/s)" << std::endl;
-            for (auto motor_id : config[config_interface]) {
-                hw.control_motor_in_velocity_mode(config_interface, motor_id, 50.0f);
-            }
-        }
-    }
-    
-    // 等待电机转动
-    std::cout << "等待电机转动..." << std::endl;
-    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-    
-    // 等待一段时间让状态反馈到达
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    
-    // 检查电机状态
-    std::cout << "检查电机转动状态:" << std::endl;
-    std::cout << "状态事件接收计数: " << status_collector->status_received_count.load() << std::endl;
-    
-    for (const auto& interface : available_interfaces) {
-        std::string config_interface = (interface == "vcan0") ? "can0" : interface;
-        
-        if (config.find(config_interface) != config.end() && !config[config_interface].empty()) {
-            for (auto motor_id : config[config_interface]) {
-                auto status = status_collector->get_motor_status(config_interface, motor_id);
-                std::cout << "  " << config_interface << " 电机" << motor_id 
-                          << " 速度: " << status.velocity 
-                          << " 使能标志: " << (int)status.enable_flag 
-                          << " 电机模式: " << (int)status.motor_mode << std::endl;
-            }
-        }
+        // 配置电机
+        interface_config_ = {
+            {"can0", {1, 2, 3}},
+            {"can1", {4, 5, 6}}
+        };
     }
 
-    // 发送速度0命令停止电机
-    for (const auto& interface : available_interfaces) {
-        std::string config_interface = (interface == "vcan0") ? "can0" : interface;
-        
-        if (config.find(config_interface) != config.end() && !config[config_interface].empty()) {
-            std::cout << "发送" << config_interface << " 速度0命令停止电机" << std::endl;
-            for (auto motor_id : config[config_interface]) {
-                hw.control_motor_in_velocity_mode(config_interface, motor_id, 0.0f);
-            }
-        }
+    void TearDown() override {
+        mock_driver_.reset();
+        observer_.reset();
     }
-    
-    // 等待电机完全停止
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    
-    // 失能电机 - 只对实际连接的电机进行操作
-    for (const auto& interface : available_interfaces) {
-        std::string config_interface = (interface == "vcan0") ? "can0" : interface;
-        
-        if (config.find(config_interface) != config.end() && !config[config_interface].empty()) {
-            std::cout << "失能" << config_interface << " 电机" << std::endl;
-            for (auto motor_id : config[config_interface]) {
-                hw.disable_motor(config_interface, motor_id);
-            }
-        }
-    }
-    // 等待失能命令生效和状态反馈
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
-    // 获取电机状态
-    std::cout << "最终状态事件接收计数: " << status_collector->status_received_count.load() << std::endl;
-    
-    auto can0_status = status_collector->get_all_motor_status("can0");
-    std::cout << "can0电机状态:" << std::endl;
-    for (const auto& [motor_id, status] : can0_status) {
-        std::cout << "can0 motor" << motor_id << "  使能标志: " << (int)status.enable_flag << std::endl;
-        std::cout << "can0 motor" << motor_id << "  速度: " << status.velocity << std::endl;
+    std::shared_ptr<MockMotorDriver> mock_driver_;
+    std::shared_ptr<TestMotorStatusObserver> observer_;
+    MotorConfig interface_config_;
+};
+
+// ==================== 单个电机控制测试 ====================
+
+TEST_F(RobotHardwareTest, ControlMotorInVelocityMode) {
+    EXPECT_CALL(*mock_driver_, send_velocity_cmd("can0", 1, 5.0f, 0.0f, 0.0f))
+        .Times(1);
+    EXPECT_CALL(*mock_driver_, send_velocity_cmd("can0", 2, -3.5f, 0.1f, 0.05f))
+        .Times(1);
+
+    // 使用简单的 callback 构造函数（不使用观察者）
+    auto callback = [](const std::string&, uint32_t, const hardware_driver::motor_driver::Motor_Status&) {};
+    RobotHardware hw(mock_driver_, interface_config_, callback);
+
+    hw.control_motor_in_velocity_mode("can0", 1, 5.0f);
+    hw.control_motor_in_velocity_mode("can0", 2, -3.5f, 0.1f, 0.05f);
+}
+
+TEST_F(RobotHardwareTest, ControlMotorInPositionMode) {
+    EXPECT_CALL(*mock_driver_, send_position_cmd("can0", 1, 45.0f, 0.0f, 0.0f))
+        .Times(1);
+    EXPECT_CALL(*mock_driver_, send_position_cmd("can1", 4, 90.0f, 0.2f, 0.1f))
+        .Times(1);
+
+    auto callback = [](const std::string&, uint32_t, const hardware_driver::motor_driver::Motor_Status&) {};
+    RobotHardware hw(mock_driver_, interface_config_, callback);
+
+    hw.control_motor_in_position_mode("can0", 1, 45.0f);
+    hw.control_motor_in_position_mode("can1", 4, 90.0f, 0.2f, 0.1f);
+}
+
+TEST_F(RobotHardwareTest, ControlMotorInEffortMode) {
+    EXPECT_CALL(*mock_driver_, send_effort_cmd("can0", 1, 2.5f, 0.0f, 0.0f))
+        .Times(1);
+    EXPECT_CALL(*mock_driver_, send_effort_cmd("can0", 3, -1.5f, 0.15f, 0.075f))
+        .Times(1);
+
+    auto callback = [](const std::string&, uint32_t, const hardware_driver::motor_driver::Motor_Status&) {};
+    RobotHardware hw(mock_driver_, interface_config_, callback);
+
+    hw.control_motor_in_effort_mode("can0", 1, 2.5f);
+    hw.control_motor_in_effort_mode("can0", 3, -1.5f, 0.15f, 0.075f);
+}
+
+TEST_F(RobotHardwareTest, ControlMotorInMITMode) {
+    EXPECT_CALL(*mock_driver_, send_mit_cmd("can0", 1, 30.0f, 2.0f, 0.5f, 0.1f, 0.05f))
+        .Times(1);
+    EXPECT_CALL(*mock_driver_, send_mit_cmd("can1", 5, 60.0f, 3.0f, 1.0f, 0.2f, 0.1f))
+        .Times(1);
+
+    auto callback = [](const std::string&, uint32_t, const hardware_driver::motor_driver::Motor_Status&) {};
+    RobotHardware hw(mock_driver_, interface_config_, callback);
+
+    hw.control_motor_in_mit_mode("can0", 1, 30.0f, 2.0f, 0.5f, 0.1f, 0.05f);
+    hw.control_motor_in_mit_mode("can1", 5, 60.0f, 3.0f, 1.0f, 0.2f, 0.1f);
+}
+
+// ==================== 电机启用/禁用测试 ====================
+
+TEST_F(RobotHardwareTest, EnableSingleMotor) {
+    EXPECT_CALL(*mock_driver_, enable_motor("can0", 1, 4))
+        .Times(1);
+    EXPECT_CALL(*mock_driver_, enable_motor("can0", 3, 5))
+        .Times(1);
+
+    auto callback = [](const std::string&, uint32_t, const hardware_driver::motor_driver::Motor_Status&) {};
+    RobotHardware hw(mock_driver_, interface_config_, callback);
+
+    hw.enable_motor("can0", 1, 4);  // Velocity mode
+    hw.enable_motor("can0", 3, 5);  // Position mode
+}
+
+TEST_F(RobotHardwareTest, DisableSingleMotor) {
+    EXPECT_CALL(*mock_driver_, disable_motor("can0", 2, 4))
+        .Times(1);
+    EXPECT_CALL(*mock_driver_, disable_motor("can1", 5, 3))
+        .Times(1);
+
+    auto callback = [](const std::string&, uint32_t, const hardware_driver::motor_driver::Motor_Status&) {};
+    RobotHardware hw(mock_driver_, interface_config_, callback);
+
+    hw.disable_motor("can0", 2, 4);
+    hw.disable_motor("can1", 5, 3);
+}
+
+TEST_F(RobotHardwareTest, EnableMultipleMotors) {
+    EXPECT_CALL(*mock_driver_, enable_all_motors("can0", std::vector<uint32_t>{1, 2, 3}, 4))
+        .Times(1);
+    EXPECT_CALL(*mock_driver_, enable_all_motors("can1", std::vector<uint32_t>{4, 5}, 5))
+        .Times(1);
+
+    auto callback = [](const std::string&, uint32_t, const hardware_driver::motor_driver::Motor_Status&) {};
+    RobotHardware hw(mock_driver_, interface_config_, callback);
+
+    hw.enable_motors("can0", {1, 2, 3}, 4);
+    hw.enable_motors("can1", {4, 5}, 5);
+}
+
+TEST_F(RobotHardwareTest, DisableMultipleMotors) {
+    EXPECT_CALL(*mock_driver_, disable_all_motors("can0", std::vector<uint32_t>{1, 3}, 4))
+        .Times(1);
+    EXPECT_CALL(*mock_driver_, disable_all_motors("can1", std::vector<uint32_t>{5, 6}, 3))
+        .Times(1);
+
+    auto callback = [](const std::string&, uint32_t, const hardware_driver::motor_driver::Motor_Status&) {};
+    RobotHardware hw(mock_driver_, interface_config_, callback);
+
+    hw.disable_motors("can0", {1, 3}, 4);
+    hw.disable_motors("can1", {5, 6}, 3);
+}
+
+// ==================== 实时批量命令测试 ====================
+
+TEST_F(RobotHardwareTest, SendRealtimeVelocityCommand) {
+    auto callback = [](const std::string&, uint32_t, const hardware_driver::motor_driver::Motor_Status&) {};
+    RobotHardware hw(mock_driver_, interface_config_, callback);
+
+    std::array<double, 6> velocities = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0};
+    bool result = hw.send_realtime_velocity_command("can0", velocities);
+    EXPECT_TRUE(result);
+}
+
+TEST_F(RobotHardwareTest, SendRealtimePositionCommand) {
+    auto callback = [](const std::string&, uint32_t, const hardware_driver::motor_driver::Motor_Status&) {};
+    RobotHardware hw(mock_driver_, interface_config_, callback);
+
+    std::array<double, 6> positions = {10.0, 20.0, 30.0, 40.0, 50.0, 60.0};
+    bool result = hw.send_realtime_position_command("can0", positions);
+    EXPECT_TRUE(result);
+}
+
+TEST_F(RobotHardwareTest, SendRealtimeEffortCommand) {
+    auto callback = [](const std::string&, uint32_t, const hardware_driver::motor_driver::Motor_Status&) {};
+    RobotHardware hw(mock_driver_, interface_config_, callback);
+
+    std::array<double, 6> efforts = {0.5, 1.0, 1.5, 2.0, 2.5, 3.0};
+    bool result = hw.send_realtime_effort_command("can0", efforts);
+    EXPECT_TRUE(result);
+}
+
+TEST_F(RobotHardwareTest, SendRealtimeMITCommand) {
+    auto callback = [](const std::string&, uint32_t, const hardware_driver::motor_driver::Motor_Status&) {};
+    RobotHardware hw(mock_driver_, interface_config_, callback);
+
+    std::array<double, 6> positions = {30.0, 40.0, 50.0, 60.0, 70.0, 80.0};
+    std::array<double, 6> velocities = {1.0, 1.5, 2.0, 2.5, 3.0, 3.5};
+    std::array<double, 6> efforts = {0.5, 1.0, 1.5, 2.0, 2.5, 3.0};
+    std::array<double, 6> kps = {0.1, 0.1, 0.1, 0.1, 0.1, 0.1};
+    std::array<double, 6> kds = {0.05, 0.05, 0.05, 0.05, 0.05, 0.05};
+
+    bool result = hw.send_realtime_mit_command("can0", positions, velocities, efforts, kps, kds);
+    EXPECT_TRUE(result);
+}
+
+// ==================== 参数读写测试 ====================
+
+TEST_F(RobotHardwareTest, MotorParameterRead) {
+    EXPECT_CALL(*mock_driver_, motor_parameter_read("can0", 1, 0x0008))
+        .Times(1);
+    EXPECT_CALL(*mock_driver_, motor_parameter_read("can1", 5, 0x000A))
+        .Times(1);
+
+    auto callback = [](const std::string&, uint32_t, const hardware_driver::motor_driver::Motor_Status&) {};
+    RobotHardware hw(mock_driver_, interface_config_, callback);
+
+    hw.motor_parameter_read("can0", 1, 0x0008);
+    hw.motor_parameter_read("can1", 5, 0x000A);
+}
+
+TEST_F(RobotHardwareTest, MotorParameterWriteInt) {
+    using ::testing::An;
+    EXPECT_CALL(*mock_driver_, motor_parameter_write("can0", 1, 0x0008, An<int32_t>()))
+        .Times(1);
+    EXPECT_CALL(*mock_driver_, motor_parameter_write("can0", 3, 0x0009, An<int32_t>()))
+        .Times(1);
+
+    auto callback = [](const std::string&, uint32_t, const hardware_driver::motor_driver::Motor_Status&) {};
+    RobotHardware hw(mock_driver_, interface_config_, callback);
+
+    hw.motor_parameter_write("can0", 1, 0x0008, static_cast<int32_t>(100000));
+    hw.motor_parameter_write("can0", 3, 0x0009, static_cast<int32_t>(-50000));
+}
+
+TEST_F(RobotHardwareTest, MotorParameterWriteFloat) {
+    using ::testing::An;
+    EXPECT_CALL(*mock_driver_, motor_parameter_write("can0", 2, 0x000B, An<float>()))
+        .Times(1);
+    EXPECT_CALL(*mock_driver_, motor_parameter_write("can1", 4, 0x000C, An<float>()))
+        .Times(1);
+
+    auto callback = [](const std::string&, uint32_t, const hardware_driver::motor_driver::Motor_Status&) {};
+    RobotHardware hw(mock_driver_, interface_config_, callback);
+
+    hw.motor_parameter_write("can0", 2, 0x000B, 3.14f);
+    hw.motor_parameter_write("can1", 4, 0x000C, -2.71f);
+}
+
+// ==================== 函数操作测试 ====================
+
+TEST_F(RobotHardwareTest, MotorFunctionOperation) {
+    EXPECT_CALL(*mock_driver_, motor_function_operation("can0", 1, 0x01))  // PARAM_RESET
+        .Times(1);
+    EXPECT_CALL(*mock_driver_, motor_function_operation("can0", 2, 0x03))  // CLEAR_ERROR_CODE
+        .Times(1);
+    EXPECT_CALL(*mock_driver_, motor_function_operation("can1", 5, 0x11))  // MOTOR_FIND_ZERO_POS
+        .Times(1);
+
+    auto callback = [](const std::string&, uint32_t, const hardware_driver::motor_driver::Motor_Status&) {};
+    RobotHardware hw(mock_driver_, interface_config_, callback);
+
+    hw.motor_function_operation("can0", 1, 0x01);
+    hw.motor_function_operation("can0", 2, 0x03);
+    hw.motor_function_operation("can1", 5, 0x11);
+}
+
+TEST_F(RobotHardwareTest, ArmZeroPositionSet) {
+    using ::testing::_;
+    // 创建一个新的 mock driver 用于这个测试，避免与其他测试的期望冲突
+    auto test_mock_driver = std::make_shared<MockMotorDriver>();
+
+    // arm_zero_position_set 对每个电机调用两次 motor_function_operation
+    // 一次发送 0x04 (MOTOR_ZERO_POS_SET), 一次发送 0x02
+    // 所以3个电机 = 6次调用
+    EXPECT_CALL(*test_mock_driver, motor_function_operation("can0", _, _))
+        .Times(6);
+
+    auto callback = [](const std::string&, uint32_t, const hardware_driver::motor_driver::Motor_Status&) {};
+    RobotHardware hw(test_mock_driver, interface_config_, callback);
+
+    hw.arm_zero_position_set("can0", {1, 2, 3});
+}
+
+// ==================== IAP固件更新测试 ====================
+
+TEST_F(RobotHardwareTest, StartIAPUpdate) {
+    EXPECT_CALL(*mock_driver_, start_update("can0", 1, "/path/to/firmware.bin"))
+        .Times(1);
+    EXPECT_CALL(*mock_driver_, start_update("can1", 5, "/path/to/another_firmware.hex"))
+        .Times(1);
+
+    auto callback = [](const std::string&, uint32_t, const hardware_driver::motor_driver::Motor_Status&) {};
+    RobotHardware hw(mock_driver_, interface_config_, callback);
+
+    hw.start_update("can0", 1, "/path/to/firmware.bin");
+    hw.start_update("can1", 5, "/path/to/another_firmware.hex");
+}
+
+// ==================== 状态监控控制测试 ====================
+
+TEST_F(RobotHardwareTest, PauseStatusMonitoring) {
+    auto callback = [](const std::string&, uint32_t, const hardware_driver::motor_driver::Motor_Status&) {};
+    RobotHardware hw(mock_driver_, interface_config_, callback);
+
+    // 测试暂停状态监控功能
+    hw.pause_status_monitoring();
+    // 验证没有异常抛出
+    EXPECT_TRUE(true);
+}
+
+TEST_F(RobotHardwareTest, ResumeStatusMonitoring) {
+    auto callback = [](const std::string&, uint32_t, const hardware_driver::motor_driver::Motor_Status&) {};
+    RobotHardware hw(mock_driver_, interface_config_, callback);
+
+    // 测试恢复状态监控功能
+    hw.resume_status_monitoring();
+    // 验证没有异常抛出
+    EXPECT_TRUE(true);
+}
+
+// ==================== 复杂场景测试 ====================
+
+TEST_F(RobotHardwareTest, FullMotorControlSequence) {
+    // 期望的调用顺序
+    EXPECT_CALL(*mock_driver_, enable_motor("can0", 1, 4)).Times(1);
+    EXPECT_CALL(*mock_driver_, send_velocity_cmd("can0", 1, 5.0f, 0.0f, 0.0f)).Times(1);
+    EXPECT_CALL(*mock_driver_, disable_motor("can0", 1, 4)).Times(1);
+
+    auto callback = [](const std::string&, uint32_t, const hardware_driver::motor_driver::Motor_Status&) {};
+    RobotHardware hw(mock_driver_, interface_config_, callback);
+
+    // 启用电机
+    hw.enable_motor("can0", 1, 4);
+
+    // 发送速度命令
+    hw.control_motor_in_velocity_mode("can0", 1, 5.0f);
+
+    // 禁用电机
+    hw.disable_motor("can0", 1, 4);
+}
+
+TEST_F(RobotHardwareTest, MultiInterfaceControl) {
+    // Can0 的操作
+    EXPECT_CALL(*mock_driver_, enable_all_motors("can0", std::vector<uint32_t>{1, 2}, 4)).Times(1);
+    EXPECT_CALL(*mock_driver_, send_velocity_cmd("can0", 1, 2.0f, 0.0f, 0.0f)).Times(1);
+    EXPECT_CALL(*mock_driver_, send_velocity_cmd("can0", 2, -2.0f, 0.0f, 0.0f)).Times(1);
+
+    // Can1 的操作
+    EXPECT_CALL(*mock_driver_, enable_all_motors("can1", std::vector<uint32_t>{4, 5}, 5)).Times(1);
+    EXPECT_CALL(*mock_driver_, send_position_cmd("can1", 4, 45.0f, 0.0f, 0.0f)).Times(1);
+    EXPECT_CALL(*mock_driver_, send_position_cmd("can1", 5, 90.0f, 0.0f, 0.0f)).Times(1);
+
+    auto callback = [](const std::string&, uint32_t, const hardware_driver::motor_driver::Motor_Status&) {};
+    RobotHardware hw(mock_driver_, interface_config_, callback);
+
+    // Can0 速度控制
+    hw.enable_motors("can0", {1, 2}, 4);
+    hw.control_motor_in_velocity_mode("can0", 1, 2.0f);
+    hw.control_motor_in_velocity_mode("can0", 2, -2.0f);
+
+    // Can1 位置控制
+    hw.enable_motors("can1", {4, 5}, 5);
+    hw.control_motor_in_position_mode("can1", 4, 45.0f);
+    hw.control_motor_in_position_mode("can1", 5, 90.0f);
+}
+
+TEST_F(RobotHardwareTest, ParameterAndFunctionOperations) {
+    using ::testing::An;
+    // 参数读写
+    EXPECT_CALL(*mock_driver_, motor_parameter_read("can0", 1, 0x0008)).Times(1);
+    EXPECT_CALL(*mock_driver_, motor_parameter_write("can0", 1, 0x0008, An<int32_t>())).Times(1);
+    EXPECT_CALL(*mock_driver_, motor_parameter_write("can0", 1, 0x0009, An<float>())).Times(1);
+
+    // 函数操作
+    EXPECT_CALL(*mock_driver_, motor_function_operation("can0", 1, 0x03)).Times(1);  // 清除错误码
+    EXPECT_CALL(*mock_driver_, motor_function_operation("can0", 1, 0x04)).Times(1);  // 设置零位
+
+    auto callback = [](const std::string&, uint32_t, const hardware_driver::motor_driver::Motor_Status&) {};
+    RobotHardware hw(mock_driver_, interface_config_, callback);
+
+    // 参数操作
+    hw.motor_parameter_read("can0", 1, 0x0008);
+    hw.motor_parameter_write("can0", 1, 0x0008, static_cast<int32_t>(50000));
+    hw.motor_parameter_write("can0", 1, 0x0009, 1.5f);
+
+    // 函数操作
+    hw.motor_function_operation("can0", 1, 0x03);
+    hw.motor_function_operation("can0", 1, 0x04);
+}
+
+// ==================== 边界和错误情况测试 ====================
+
+TEST_F(RobotHardwareTest, ControlWithVariousParameterCombinations) {
+    // 测试各种参数组合
+    EXPECT_CALL(*mock_driver_, send_velocity_cmd).Times(3);
+    EXPECT_CALL(*mock_driver_, send_position_cmd).Times(3);
+    EXPECT_CALL(*mock_driver_, send_effort_cmd).Times(3);
+
+    auto callback = [](const std::string&, uint32_t, const hardware_driver::motor_driver::Motor_Status&) {};
+    RobotHardware hw(mock_driver_, interface_config_, callback);
+
+    // 测试正值
+    hw.control_motor_in_velocity_mode("can0", 1, 10.0f);
+    hw.control_motor_in_position_mode("can0", 1, 90.0f, 0.1f, 0.05f);
+    hw.control_motor_in_effort_mode("can0", 1, 2.0f, 0.05f, 0.025f);
+
+    // 测试负值
+    hw.control_motor_in_velocity_mode("can0", 2, -10.0f);
+    hw.control_motor_in_position_mode("can0", 2, -90.0f, 0.1f, 0.05f);
+    hw.control_motor_in_effort_mode("can0", 2, -2.0f, 0.05f, 0.025f);
+
+    // 测试零值
+    hw.control_motor_in_velocity_mode("can0", 3, 0.0f);
+    hw.control_motor_in_position_mode("can0", 3, 0.0f);
+    hw.control_motor_in_effort_mode("can0", 3, 0.0f);
+}
+
+TEST_F(RobotHardwareTest, RealtimeCommandWithZeroValues) {
+    auto callback = [](const std::string&, uint32_t, const hardware_driver::motor_driver::Motor_Status&) {};
+    RobotHardware hw(mock_driver_, interface_config_, callback);
+
+    std::array<double, 6> zeros = {};
+    std::array<double, 6> ones = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0};
+
+    // Test realtime commands with zero and non-zero values
+    bool vel_result = hw.send_realtime_velocity_command("can0", zeros);
+    bool pos_result = hw.send_realtime_position_command("can0", ones);
+    bool eff_result = hw.send_realtime_effort_command("can0", zeros);
+    bool mit_result = hw.send_realtime_mit_command("can0", ones, zeros, ones);
+
+    EXPECT_TRUE(vel_result);
+    EXPECT_TRUE(pos_result);
+    EXPECT_TRUE(eff_result);
+    EXPECT_TRUE(mit_result);
+}
+
+// ==================== 多个电机同时控制 ====================
+
+TEST_F(RobotHardwareTest, MultipleMotorsSequentialControl) {
+    EXPECT_CALL(*mock_driver_, send_velocity_cmd).Times(6);
+    EXPECT_CALL(*mock_driver_, send_position_cmd).Times(3);
+
+    auto callback = [](const std::string&, uint32_t, const hardware_driver::motor_driver::Motor_Status&) {};
+    RobotHardware hw(mock_driver_, interface_config_, callback);
+
+    // 速度控制 - 6个电机
+    for (int i = 1; i <= 3; ++i) {
+        hw.control_motor_in_velocity_mode("can0", i, i * 2.0f);
     }
-    
-    // 验证观察者模式正常工作
-    std::cout << "状态观察者统计: 接收状态更新=" << status_collector->status_received_count.load() << std::endl;
-    
-    // 明确清理资源，避免析构时的竞态条件
-    std::cout << "清理测试资源..." << std::endl;
-    real_driver->remove_observer(status_collector);
-    real_driver.reset();
-    bus.reset();
-    
-    // 等待所有资源完全释放
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    std::cout << "测试完成" << std::endl;
+    for (int i = 4; i <= 6; ++i) {
+        hw.control_motor_in_velocity_mode("can1", i, -(i - 3) * 2.0f);
+    }
+
+    // 位置控制 - 3个电机
+    for (int i = 1; i <= 3; ++i) {
+        hw.control_motor_in_position_mode("can0", i, i * 30.0f);
+    }
+}
+
+int main(int argc, char** argv) {
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
 }

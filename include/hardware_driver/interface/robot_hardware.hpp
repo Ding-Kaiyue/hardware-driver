@@ -28,6 +28,7 @@ namespace hardware_driver {
     }
     namespace bus {
         class CanFdBus;
+        class Usb2CanFdBus;
     }
 }
 
@@ -36,6 +37,10 @@ namespace hardware_driver {
     // 创建CANFD电机驱动实例
     std::shared_ptr<motor_driver::MotorDriverInterface> createCanFdMotorDriver(
         const std::vector<std::string>& interfaces);
+
+    // 创建USB2CANFD电机驱动实例
+    std::shared_ptr<motor_driver::MotorDriverInterface> createUsb2CanfdMotorDriver(
+        const std::vector<std::string>& device_sns);
 }
 
 // ========== 轨迹数据结构定义 ==========

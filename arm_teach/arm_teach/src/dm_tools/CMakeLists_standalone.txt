@@ -1,0 +1,27 @@
+cmake_minimum_required(VERSION 3.16)
+project(dm_tools)
+
+# 设置C++标准
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# 查找 libusb-1.0 库
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
+
+# Include directories
+include_directories(${LIBUSB_INCLUDE_DIRS})
+
+# Device serial number detector tool
+add_executable(dev_sn
+  src/dev_sn.cpp
+)
+
+target_link_libraries(dev_sn
+  ${LIBUSB_LIBRARIES}
+)
+
+# Install (optional)
+install(TARGETS dev_sn
+  DESTINATION bin
+)

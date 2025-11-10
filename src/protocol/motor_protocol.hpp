@@ -154,7 +154,7 @@ bool pack_disable_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, siz
  * @return bool 返回是否成功打包
  */
 bool pack_disable_all_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size_t& len,
-    std::vector<uint8_t> disable_flags, uint8_t mode);
+    std::array<uint8_t, 6> disable_flags, std::array<uint8_t, 6> mode);
 
 /**
  * @brief 打包启用电机命令，电机工作在指定模式
@@ -168,7 +168,7 @@ bool pack_enable_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size
  * @return bool 返回是否成功打包
  */
 bool pack_enable_all_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size_t& len,
-    std::vector<uint8_t> enable_flags, uint8_t mode);
+    std::array<uint8_t, 6> enable_flags, std::array<uint8_t, 6> mode);
 
 /**
  * @brief 打包控制命令，电机工作的控制打包函数只负责填充data和len

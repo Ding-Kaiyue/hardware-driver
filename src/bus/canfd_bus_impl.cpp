@@ -300,5 +300,5 @@ void CanFdBus::receive_loop(const std::string& interface) {
     }
 }
 
-}   // namespace canfd_bus
+}   // namespace bus
 }    // namespace hardware_driver

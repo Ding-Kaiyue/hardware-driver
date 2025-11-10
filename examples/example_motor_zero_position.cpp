@@ -100,13 +100,21 @@ int main() {
         robot->pause_status_monitoring();  // 停止状态输出
         std::cin.get();
         robot->resume_status_monitoring(); // 恢复状态输出
-        
+
+        // 使能电机到位置控制模式 (模式5)
+        std::cout << "使能电机到位置控制模式..." << std::endl;
+        for (uint32_t motor_id : arm_motors) {
+            robot->enable_motor("can0", motor_id, 5);  // 位置控制模式
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
         // 小幅运动测试
+        std::cout << "执行小幅运动测试（移动10度）..." << std::endl;
         for (uint32_t motor_id : arm_motors) {
             robot->control_motor_in_position_mode("can0", motor_id, 10.0);  // 移动10度
         }
         std::this_thread::sleep_for(std::chrono::seconds(1));
-        
+
         // 回零测试
         std::cout << "\n步骤4: 回零测试" << std::endl;
         std::cout << "按Enter开始回零...";
@@ -114,6 +122,7 @@ int main() {
         std::cin.get();
         robot->resume_status_monitoring(); // 恢复状态输出
 
+        std::cout << "执行回零操作..." << std::endl;
         for (uint32_t motor_id : arm_motors) {
             robot->control_motor_in_position_mode("can0", motor_id, 0.0);   // 回到零位
         }
@@ -122,7 +131,7 @@ int main() {
         
         std::cout << "\n步骤5: 失能电机" << std::endl;
         for (uint32_t motor_id : arm_motors) {
-            robot->disable_motor("can0", motor_id, 4);
+            robot->disable_motor("can0", motor_id, 5);
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
         

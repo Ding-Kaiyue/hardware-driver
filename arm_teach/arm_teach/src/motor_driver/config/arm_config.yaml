@@ -1,0 +1,67 @@
+# Damiao 7-DOF Arm Configuration
+
+# Hardware configuration
+device_serial_number: "14AA044B241402B10DDBDAFE448040BB"  # Replace with your device SN
+control_frequency: 1000.0    # Control loop frequency in Hz
+
+# Control parameters
+position_tolerance: 0.01     # Position tolerance in radians
+velocity_limit: 5.0          # Maximum velocity in rad/s
+
+# Joint-specific PID gains
+# Format: [joint1, joint2, joint3, joint4, joint5, joint6, joint7]
+kp_gains: [5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 3.0]  # Position gains
+kd_gains: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.3]  # Velocity gains
+
+# Joint configuration (based on main.cpp)
+# joint1-3: DM4340 motors (higher torque)
+# joint4-6: DM4310 motors (medium torque) 
+# joint7:   DMH3510 motor (high precision)
+
+joint_names: ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6", "joint7"]
+can_ids: [1, 2, 3, 4, 5, 6, 7]
+master_ids: [17, 34, 51, 68, 85, 102, 119]  # 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77
+
+# Individual joint limits (all in radians)
+joint_limits:
+  joint1:
+    min_position: -6.28    # -2π
+    max_position: 6.28     # +2π
+    max_velocity: 5.0
+    max_effort: 10.0
+    
+  joint2:
+    min_position: -6.28
+    max_position: 6.28
+    max_velocity: 5.0
+    max_effort: 10.0
+    
+  joint3:
+    min_position: -6.28
+    max_position: 6.28
+    max_velocity: 5.0
+    max_effort: 10.0
+    
+  joint4:
+    min_position: -6.28
+    max_position: 6.28
+    max_velocity: 5.0
+    max_effort: 8.0
+    
+  joint5:
+    min_position: -6.28
+    max_position: 6.28
+    max_velocity: 5.0
+    max_effort: 8.0
+    
+  joint6:
+    min_position: -6.28
+    max_position: 6.28
+    max_velocity: 5.0
+    max_effort: 8.0
+    
+  joint7:
+    min_position: -6.28
+    max_position: 6.28
+    max_velocity: 8.0      # Higher speed for wrist
+    max_effort: 5.0        # Lower torque for precision

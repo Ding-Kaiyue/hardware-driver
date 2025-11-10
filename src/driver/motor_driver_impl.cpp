@@ -1,6 +1,7 @@
 #include "motor_driver_impl.hpp"
 #include "bus/canfd_bus_impl.hpp"
 #include <thread>
+#include <algorithm>
 
 namespace hardware_driver {
 namespace motor_driver {
@@ -185,6 +186,13 @@ void MotorDriverImpl::disable_motor(const std::string interface, const uint32_t 
         // 失能命令使用高优先级
         send_control_command(packet, CommandPriority::HIGH);
     }
+
+    // 保存电机的模式信息
+    {
+        std::lock_guard<std::mutex> lock(motor_modes_mutex_);
+        Motor_Key key{interface, motor_id};
+        motor_modes_[key] = mode;
+    }
 }
 
 void MotorDriverImpl::disable_all_motors(const std::string interface, std::vector<uint32_t> motor_ids, uint8_t mode) {
@@ -192,10 +200,32 @@ void MotorDriverImpl::disable_all_motors(const std::string interface, std::vecto
     packet.interface = interface;
     packet.id = 0x00;  // 对所有电机发送失能命令
 
-    std::vector<uint8_t> disable_flags;
-    disable_flags.assign(motor_ids.size(), 0x00); // 全部失能
+    std::array<uint8_t, 6> disable_flags;
+    std::array<uint8_t, 6> mode_array;
+    disable_flags.fill(0x00);  // 初始化所有电机为失能状态
 
-    if (motor_protocol::pack_disable_all_command(packet.data, packet.len, disable_flags, mode)) {
+    {
+        std::lock_guard<std::mutex> lock(motor_modes_mutex_);
+
+        // 为所有电机填充模式数组
+        for (size_t i = 0; i < 6; ++i) {
+            uint32_t motor_id = i + 1;  // 电机ID从1-6
+            Motor_Key key{interface, motor_id};
+
+            // 如果电机在指定列表中，设置失能标志为0，使用传入的mode
+            if (std::find(motor_ids.begin(), motor_ids.end(), motor_id) != motor_ids.end()) {
+                disable_flags[i] = 0x00;  // 设置为失能
+                mode_array[i] = mode;     // 使用指定的mode
+            } else {
+                // 其他电机保持当前状态，使用其当前模式
+                disable_flags[i] = 0x00;  // 不改变状态（默认失能）
+                auto it = motor_modes_.find(key);
+                mode_array[i] = (it != motor_modes_.end()) ? it->second : 0x04;  // 默认速度模式
+            }
+        }
+    }
+
+    if (motor_protocol::pack_disable_all_command(packet.data, packet.len, disable_flags, mode_array)) {
         // 失能命令使用高优先级
         send_control_command(packet, CommandPriority::HIGH);
     }
@@ -205,22 +235,52 @@ void MotorDriverImpl::enable_motor(const std::string interface, const uint32_t m
     bus::GenericBusPacket packet;
     packet.interface = interface;
     packet.id = motor_id;
-    
+
     if (motor_protocol::pack_enable_command(packet.data, packet.len, mode)) {
         // 使能命令使用高优先级
         send_control_command(packet, CommandPriority::HIGH);
+    }
+
+    // 保存电机的模式信息
+    {
+        std::lock_guard<std::mutex> lock(motor_modes_mutex_);
+        Motor_Key key{interface, motor_id};
+        motor_modes_[key] = mode;
     }
 }
 
 void MotorDriverImpl::enable_all_motors(const std::string interface, std::vector<uint32_t> motor_ids, uint8_t mode) {
     bus::GenericBusPacket packet;
     packet.interface = interface;
-    packet.id = 0x00;  // 对所有电机发送使能命令（要求它们必须工作在同一模式下）
+    packet.id = 0x00;  // 对所有电机发送使能命令
 
-    std::vector<uint8_t> enable_flags;
-    enable_flags.assign(motor_ids.size(), 0x01); // 全部使能
+    std::array<uint8_t, 6> enable_flags;
+    std::array<uint8_t, 6> mode_array;
+    enable_flags.fill(0x00);  // 初始化所有电机为失能状态
 
-    if (motor_protocol::pack_enable_all_command(packet.data, packet.len, enable_flags, mode)) {
+    {
+        std::lock_guard<std::mutex> lock(motor_modes_mutex_);
+
+        // 为所有电机填充模式数组
+        for (size_t i = 0; i < 6; ++i) {
+            uint32_t motor_id = i + 1;  // 电机ID从1-6
+            Motor_Key key{interface, motor_id};
+
+            // 如果电机在指定列表中，使用新的mode并设置使能标志为1
+            if (std::find(motor_ids.begin(), motor_ids.end(), motor_id) != motor_ids.end()) {
+                enable_flags[i] = 0x01;  // 设置为使能
+                mode_array[i] = mode;    // 使用新的mode
+                motor_modes_[key] = mode;  // 保存新模式
+            } else {
+                // 其他电机保持失能，使用其当前模式
+                enable_flags[i] = 0x00;  // 保持失能
+                auto it = motor_modes_.find(key);
+                mode_array[i] = (it != motor_modes_.end()) ? it->second : 0x04;  // 默认速度模式
+            }
+        }
+    }
+
+    if (motor_protocol::pack_enable_all_command(packet.data, packet.len, enable_flags, mode_array)) {
         // 使能命令使用高优先级
         send_control_command(packet, CommandPriority::HIGH);
     }

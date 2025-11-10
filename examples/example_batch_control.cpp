@@ -60,21 +60,45 @@ int main() {
         uint8_t motor_mode = 4;
         // 批量电机使能
         robot->enable_motors("can0", motor_config["can0"], motor_mode);
-        std::cout << "✅ 批量电机使能成功" << std::endl;
+        std::cout << "✅ 批量电机使能到速度模式成功" << std::endl;
 
         // 为 6 个电机设置速度（使用 std::array 避免动态分配）
-        std::array<double, 6> velocities = {10.0, 10.0, 10.0, 10.0, 10.0, 10.0};
+        std::array<double, 6> velocities = {-10.0, -10.0, -10.0, -10.0, -10.0, -10.0};
 
         // 调用批量速度控制接口（不指定 kps 和 kds，使用默认值 0.0）
         if (robot->send_realtime_velocity_command("can0", velocities)) {
             std::cout << "✅ 批量速度命令发送成功" << std::endl;
         }
-        std::this_thread::sleep_for(std::chrono::seconds(3));
+        std::this_thread::sleep_for(std::chrono::seconds(1));
 
         robot->disable_motors("can0", motor_config["can0"], motor_mode);
-
         std::cout << "✅ 批量电机失能成功" << std::endl;
 
+        // ============================================================
+        // 示例 2: 批量位置控制 - 所有电机运动到零位
+        // ============================================================
+        std::cout << "\n=== 示例 2: 批量位置控制 ===" << std::endl;
+        std::cout << "所有电机运动到零位..." << std::endl;
+
+        motor_mode = 5;
+        // 批量电机使能
+        robot->enable_motors("can0", motor_config["can0"], motor_mode);
+        std::cout << "✅ 批量电机使能到位置模式成功" << std::endl;
+
+        // 为 6 个电机设置目标位置（使用 std::array 避免动态分配）
+        std::array<double, 6> positions = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+
+        // 调用批量位置控制接口（ kps = 0.05, kds = 0.01）
+        std::array<double, 6> kps = {0.05, 0.05, 0.05, 0.05, 0.05, 0.05};
+        std::array<double, 6> kds = {0.01, 0.01, 0.01, 0.01, 0.01, 0.01};
+        if (robot->send_realtime_position_command("can0", positions, kps, kds)) {
+            std::cout << "✅ 批量位置命令发送成功" << std::endl;
+        }
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+
+        // 批量电机失能
+        robot->disable_motors("can0", motor_config["can0"], motor_mode);
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
     } catch (const std::exception& e) {
         std::cerr << "❌ 错误: " << e.what() << std::endl;
         return 1;

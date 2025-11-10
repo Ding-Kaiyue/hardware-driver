@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>dm_arm_v2_r</name>
+  <version>1.0.0</version>
+  <description>TODO: Package description</description>
+
+  <maintainer email="1959711225@qq.com">Your Name</maintainer>
+  <author>Mr_Cheng</author>
+    <license>TODO: License declaration</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <build_depend>robot_state_publisher</build_depend>
+  <build_depend>rviz2</build_depend>
+  <build_depend>joint_state_publisher</build_depend>
+  <build_depend>joint_state_publisher_gui</build_depend>
+  <build_depend>gazebo_ros</build_depend>
+  <build_depend>xacro</build_depend>
+
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+  <exec_depend>joint_state_publisher</exec_depend>
+  <exec_depend>joint_state_publisher_gui</exec_depend>
+  <exec_depend>gazebo_ros</exec_depend>
+  <exec_depend>xacro</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+
+  <export>
+    <architecture_independent/>
+    <build_type>ament_cmake</build_type>
+  </export>
+  
+</package>
+

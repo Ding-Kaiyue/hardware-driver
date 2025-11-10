@@ -31,10 +31,10 @@ public:
 
 int main() {
     std::cout << "=== 电机回调模式示例程序 ===" << std::endl;
-    
+
     // 配置电机接口和ID映射
     std::map<std::string, std::vector<uint32_t>> motor_config = {
-        {"can0", {1, 9}}    // can0 接口上的电机 1 和 9
+        {"can0", {1, 2, 3, 4, 5, 6}}    // can0 接口上的电机 1-6
     };
     
     try {
@@ -68,71 +68,155 @@ int main() {
         }
         
         std::cout << "硬件初始化完成，开始电机测试..." << std::endl;
-        
-        // 实际的电机控制流程
-        std::cout << "\n步骤1: 使能电机 1 和 9" << std::endl;
-        robot->enable_motor("can0", 1, 4);  // 模式4
-        robot->enable_motor("can0", 9, 4);  // 模式4
+
+        // 获取电机ID
+        uint32_t motor1 = motor_config["can0"][0];   // 电机1 - 速度模式
+        uint32_t motor2 = motor_config["can0"][1];   // 电机2 - 速度模式
+        uint32_t motor3 = motor_config["can0"][2];   // 电机3 - 位置模式
+        uint32_t motor4 = motor_config["can0"][3];   // 电机4 - 位置模式
+        uint32_t motor5 = motor_config["can0"][4];   // 电机5 - MIT模式
+        uint32_t motor6 = motor_config["can0"][5];   // 电机6 - MIT模式
+
+        std::cout << "测试电机: " << motor1 << " " << motor2 << " " << motor3 << " "
+                  << motor4 << " " << motor5 << " " << motor6 << std::endl;
+
+        // ========== 先让所有电机都失能 ==========
+        robot->disable_motors("can0", motor_config["can0"], 4);
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
-        
-        std::cout << "\n步骤2: 速度控制测试" << std::endl;
-        std::cout << "按Enter开始速度控制测试, 电机1: 3°/s, 电机9: -3°/s";
-        robot->pause_status_monitoring();  // 停止状态输出
-        std::cin.get();
-        robot->resume_status_monitoring(); // 恢复状态输出
 
-        robot->control_motor_in_velocity_mode("can0", motor_config["can0"][0], 3.0);
-        robot->control_motor_in_velocity_mode("can0", motor_config["can0"][1], -3.0);
-        std::this_thread::sleep_for(std::chrono::seconds(3));
-        
-        std::cout << "\n步骤3: 停止并失能电机" << std::endl;
-        std::cout << "按Enter停止并失能电机...";
+        // ========== 电机1和2：速度模式控制 ==========
+        std::cout << "\n=== 电机1和2：速度模式控制 ===" << std::endl;
+
+        uint8_t velocity_mode = 4; // 速度模式
+        std::cout << "按Enter使能电机1和2的速度模式...";
         robot->pause_status_monitoring();
         std::cin.get();
         robot->resume_status_monitoring();
+        robot->enable_motors("can0", {motor1, motor2}, velocity_mode);
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-        robot->control_motor_in_velocity_mode("can0", motor_config["can0"][0], 0.0);
-        robot->control_motor_in_velocity_mode("can0", motor_config["can0"][1], 0.0);
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-        robot->disable_motor("can0", motor_config["can0"][0], 4);
-        robot->disable_motor("can0", motor_config["can0"][1], 4);
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-
-        std::cout << "\n步骤4: 位置控制测试，电机1: 90°, 电机9: -45°" << std::endl;
-        std::cout << "按Enter开始位置控制测试...";
+        std::cout << "按Enter执行电机1和2正转6度/秒...";
         robot->pause_status_monitoring();
         std::cin.get();
         robot->resume_status_monitoring();
-        robot->control_motor_in_position_mode("can0", motor_config["can0"][0], 90.0);
-        robot->control_motor_in_position_mode("can0", motor_config["can0"][1], -45.0);
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-        
-        std::cout << "\n步骤5: 回零" << std::endl;
-        std::cout << "按Enter开始回零...";
-        robot->pause_status_monitoring();
-        std::cin.get();
-        robot->resume_status_monitoring();
-        robot->control_motor_in_position_mode("can0", motor_config["can0"][0], 0.0);
-        robot->control_motor_in_position_mode("can0", motor_config["can0"][1], 0.0);
+        robot->control_motor_in_velocity_mode("can0", motor1, 6.0);
+        robot->control_motor_in_velocity_mode("can0", motor2, 6.0);
         std::this_thread::sleep_for(std::chrono::seconds(2));
-        
-        std::cout << "\n步骤6: 失能电机" << std::endl;
-        std::cout << "按Enter失能电机...";
+
+        std::cout << "按Enter停止电机1和2...";
         robot->pause_status_monitoring();
         std::cin.get();
         robot->resume_status_monitoring();
-        robot->disable_motor("can0", motor_config["can0"][0], 4);
-        robot->disable_motor("can0", motor_config["can0"][1], 4);
+        robot->control_motor_in_velocity_mode("can0", motor1, 0.0);
+        robot->control_motor_in_velocity_mode("can0", motor2, 0.0);
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
-        
-        std::cout << "\n✅ 电机控制回调模式测试完成!" << std::endl;
+
+        std::cout << "按Enter执行电机1和2反转6度/秒...";
+        robot->pause_status_monitoring();
+        std::cin.get();
+        robot->resume_status_monitoring();
+        robot->control_motor_in_velocity_mode("can0", motor1, -6.0);
+        robot->control_motor_in_velocity_mode("can0", motor2, -6.0);
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+
+        std::cout << "按Enter停止并失能电机1和2...";
+        robot->pause_status_monitoring();
+        std::cin.get();
+        robot->resume_status_monitoring();
+        robot->control_motor_in_velocity_mode("can0", motor1, 0.0);
+        robot->control_motor_in_velocity_mode("can0", motor2, 0.0);
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        robot->disable_motor("can0", motor1, velocity_mode);
+        robot->disable_motor("can0", motor2, velocity_mode);
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+
+        // ========== 电机3和4：位置模式控制 ==========
+        std::cout << "\n=== 电机3和4：位置模式控制 ===" << std::endl;
+
+        uint8_t position_mode = 5; // 位置模式
+        std::cout << "按Enter使能电机3和4的位置模式...";
+        robot->pause_status_monitoring();
+        std::cin.get();
+        robot->resume_status_monitoring();
+        robot->enable_motors("can0", {motor3, motor4}, position_mode);
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+        std::cout << "按Enter执行电机3和4运动到30和-30度...";
+        robot->pause_status_monitoring();
+        std::cin.get();
+        robot->resume_status_monitoring();
+        robot->control_motor_in_position_mode("can0", motor3, 30.0);
+        robot->control_motor_in_position_mode("can0", motor4, -30.0);
+        std::this_thread::sleep_for(std::chrono::seconds(3));
+
+        std::cout << "按Enter执行电机3和4运动到-30和30度...";
+        robot->pause_status_monitoring();
+        std::cin.get();
+        robot->resume_status_monitoring();
+        robot->control_motor_in_position_mode("can0", motor3, -30.0);
+        robot->control_motor_in_position_mode("can0", motor4, 30.0);
+        std::this_thread::sleep_for(std::chrono::seconds(3));
+
+        std::cout << "按Enter执行电机3和4回到零位置...";
+        robot->pause_status_monitoring();
+        std::cin.get();
+        robot->resume_status_monitoring();
+        robot->control_motor_in_position_mode("can0", motor3, 0.0);
+        robot->control_motor_in_position_mode("can0", motor4, 0.0);
+        std::this_thread::sleep_for(std::chrono::seconds(3));
+
+        std::cout << "按Enter失能电机3和4...";
+        robot->pause_status_monitoring();
+        std::cin.get();
+        robot->resume_status_monitoring();
+        robot->disable_motor("can0", motor3, position_mode);
+        robot->disable_motor("can0", motor4, position_mode);
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+
+        // ========== 电机5和6：MIT模式控制 ==========
+        // std::cout << "\n=== 电机5和6：MIT模式控制 ===" << std::endl;
+
+        // uint8_t mit_mode = 3; // MIT模式
+        // std::cout << "按Enter使能电机5和6的MIT模式...";
+        // robot->pause_status_monitoring();
+        // std::cin.get();
+        // robot->resume_status_monitoring();
+        // robot->enable_motors("can0", {motor5, motor6}, mit_mode);
+        // std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+        // std::cout << "按Enter执行电机5和6运动到90和-90度，速度10和-10度/秒...";
+        // robot->pause_status_monitoring();
+        // std::cin.get();
+        // robot->resume_status_monitoring();
+        // robot->control_motor_in_mit_mode("can0", motor5, 90.0, 10.0, 0.0);
+        // robot->control_motor_in_mit_mode("can0", motor6, -90.0, -10.0, 0.0);
+        // std::this_thread::sleep_for(std::chrono::seconds(3));
+
+        // std::cout << "按Enter停止电机5和6...";
+        // robot->pause_status_monitoring();
+        // std::cin.get();
+        // robot->resume_status_monitoring();
+        // robot->control_motor_in_mit_mode("can0", motor5, 90.0, 0.0, 0.0);
+        // robot->control_motor_in_mit_mode("can0", motor6, -90.0, 0.0, 0.0);
+        // std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+        // std::cout << "按Enter失能电机5和6...";
+        // robot->pause_status_monitoring();
+        // std::cin.get();
+        // robot->resume_status_monitoring();
+        // robot->disable_motor("can0", motor5, mit_mode);
+        // robot->disable_motor("can0", motor6, mit_mode);
+        // std::this_thread::sleep_for(std::chrono::seconds(1));
+
+        // std::cout << "\n✅ 回调模式电机控制测试完成!" << std::endl;
         
     } catch (const std::exception& e) {
         std::cerr << "错误: " << e.what() << std::endl;
-        std::cerr << "请检查:" << std::endl;
-        std::cerr << "1. 电机1和9是否正确连接到can0" << std::endl;
-        std::cerr << "2. 电机是否已上电" << std::endl;
-        std::cerr << "3. CAN总线是否正常工作" << std::endl;
+        std::cerr << "请检查：" << std::endl;
+        std::cerr << "1. 电机1-6是否连接到can0总线" << std::endl;
+        std::cerr << "2. 电机ID是否为1到6（可修改motor_config中的ID）" << std::endl;
+        std::cerr << "3. 电机是否已上电" << std::endl;
+        std::cerr << "4. CAN总线是否正常工作" << std::endl;
         return 1;
     }
     

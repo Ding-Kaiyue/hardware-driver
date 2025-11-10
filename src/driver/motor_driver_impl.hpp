@@ -106,13 +106,13 @@ public:
     void enable_motor(const std::string interface, const uint32_t motor_id, uint8_t mode) override;
     void enable_all_motors(const std::string interface, std::vector<uint32_t> motor_ids, uint8_t mode) override;
     void send_mit_cmd(const std::string interface, const uint32_t motor_id, float position, float velocity, float effort, 
-                    float kp, float kd) override;
+                    float kp = 0.05, float kd = 0.01) override;
     void send_position_cmd(const std::string interface, const uint32_t motor_id, float position,
-                    float kp, float kd) override;
+                    float kp = 0.05, float kd = 0.01) override;
     void send_velocity_cmd(const std::string interface, const uint32_t motor_id, float velocity,
-                    float kp, float kd) override;
+                    float kp = 0.05, float kd = 0.01) override;
     void send_effort_cmd(const std::string interface, const uint32_t motor_id, float effort,
-                    float kp, float kd) override;
+                    float kp = 0.05, float kd = 0.01) override;
     void send_control_cmd(const std::string interface, std::vector<float> positions, std::vector<float> velocities, std::vector<float> efforts,
                     std::vector<float> kps, std::vector<float> kds) override;
 
@@ -170,6 +170,10 @@ private:
     std::unordered_map<Motor_Key, Motor_Status> status_map_;
     mutable std::shared_mutex status_map_mutex_;  // 读写锁，支持多读者单写者
     FeedbackCallback feedback_callback_;
+
+    // 追踪每个电机的当前模式
+    std::unordered_map<Motor_Key, uint8_t> motor_modes_;  // 存储每个电机的当前模式
+    mutable std::mutex motor_modes_mutex_;  // 保护电机模式映射
     
     // ===== IAP 反馈处理支持 =====
     // 改用 map 存储每个 motor 的最新反馈，避免顺序依赖

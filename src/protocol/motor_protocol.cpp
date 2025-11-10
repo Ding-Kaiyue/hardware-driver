@@ -162,12 +162,12 @@ bool pack_disable_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, siz
 }
 
 bool pack_disable_all_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size_t& len,
-    std::vector<uint8_t> disable_flags, uint8_t mode)
+    std::array<uint8_t, 6> disable_flags, std::array<uint8_t, 6> mode)
 {
     data[0] = disable_flags.size() + 1;
     data[1] = 0x02;
     for (size_t i = 0; i < disable_flags.size(); ++i) {
-        data[2 + i] = (disable_flags[i] << 4) | mode;
+        data[2 + i] = (disable_flags[i] << 4) | mode[i];
     }
     len = 2 + disable_flags.size();
     return true;
@@ -184,12 +184,12 @@ bool pack_enable_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size
 }
 
 bool pack_enable_all_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data, size_t& len,
-    std::vector<uint8_t> enable_flags, uint8_t mode)
+    std::array<uint8_t, 6> enable_flags, std::array<uint8_t, 6> mode)
 {
     data[0] = enable_flags.size() + 1;
     data[1] = 0x02;
     for (size_t i = 0; i < enable_flags.size(); ++i) {
-        data[2 + i] = (enable_flags[i] << 4) | mode;
+        data[2 + i] = (enable_flags[i] << 4) | mode[i];
     }
     len = 2 + enable_flags.size();
     return true;
@@ -212,8 +212,8 @@ bool pack_control_all_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data,
     const std::array<float, 6>& positions, const std::array<float, 6>& velocities,
     const std::array<float, 6>& efforts, const std::array<float, 6>& kps, const std::array<float, 6>& kds)
 {
-    // 固定 6 个电机的批量控制
-    const size_t motor_count = 6;
+    // 从数组大小自动获取电机数量
+    const size_t motor_count = positions.size();
 
     // 第1位：数据长度 = 每个电机8字节 * 电机数 + 1（0x03标识）
     data[0] = motor_count * 8 + 1;
