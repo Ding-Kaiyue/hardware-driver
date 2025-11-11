@@ -49,15 +49,15 @@ add_library(hardware_driver_canfd SHARED
 )
 
 # === usb2canfd 组合 ===
-add_library(hardware_driver_usb2canfd SHARED
-  src/bus/usb2canfd_bus_impl.cpp
-  src/driver/motor_driver_impl.cpp
-  src/driver/gripper_driver_impl.cpp
-  src/protocol/motor_protocol.cpp
-  src/protocol/gripper_omnipicker_protocol.cpp
-  src/protocol/iap_protocol.cpp
-  src/interface/robot_hardware.cpp
-)
+# add_library(hardware_driver_usb2canfd SHARED
+#   src/bus/usb2canfd_bus_impl.cpp
+#   src/driver/motor_driver_impl.cpp
+#   src/driver/gripper_driver_impl.cpp
+#   src/protocol/motor_protocol.cpp
+#   src/protocol/gripper_omnipicker_protocol.cpp
+#   src/protocol/iap_protocol.cpp
+#   src/interface/robot_hardware.cpp
+# )
 
 # 设置链接库
 set(HARDWARE_DRIVER_LIBS Threads::Threads)
@@ -65,28 +65,22 @@ set(HARDWARE_DRIVER_LIBS Threads::Threads)
 target_link_libraries(hardware_driver_canfd ${HARDWARE_DRIVER_LIBS})
 
 # Find libusb for USB2CANFD
-find_package(PkgConfig QUIET)
-if(PkgConfig_FOUND)
-  pkg_check_modules(LIBUSB libusb-1.0)
-endif()
-if(NOT LIBUSB_FOUND)
-  find_library(LIBUSB_LIBRARIES usb-1.0)
-  if(LIBUSB_LIBRARIES)
-    set(LIBUSB_FOUND TRUE)
-  endif()
-endif()
+# find_package(PkgConfig QUIET)
+# if(PkgConfig_FOUND)
+#   pkg_check_modules(LIBUSB libusb-1.0)
+# endif()
+# if(NOT LIBUSB_FOUND)
+#   find_library(LIBUSB_LIBRARIES usb-1.0)
+#   if(LIBUSB_LIBRARIES)
+#     set(LIBUSB_FOUND TRUE)
+#   endif()
+# endif()
 
-set(U2CANFD_LIB_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/libu2canfd.a")
-target_link_libraries(hardware_driver_usb2canfd ${HARDWARE_DRIVER_LIBS})
-if(EXISTS ${U2CANFD_LIB_PATH})
-  target_link_libraries(hardware_driver_usb2canfd ${U2CANFD_LIB_PATH})
-  if(LIBUSB_FOUND)
-    target_link_libraries(hardware_driver_usb2canfd ${LIBUSB_LIBRARIES})
-    target_include_directories(hardware_driver_usb2canfd PRIVATE ${LIBUSB_INCLUDE_DIRS})
-  endif()
-else()
-  message(WARNING "libu2canfd.a not found at ${U2CANFD_LIB_PATH}")
-endif()
+# # target_link_libraries(hardware_driver_usb2canfd ${HARDWARE_DRIVER_LIBS})
+# # if(LIBUSB_FOUND)
+# #   target_link_libraries(hardware_driver_usb2canfd ${LIBUSB_LIBRARIES})
+# #   target_include_directories(hardware_driver_usb2canfd PRIVATE ${LIBUSB_INCLUDE_DIRS})
+# # endif()
 
 target_include_directories(hardware_driver_canfd
   PUBLIC
@@ -94,12 +88,12 @@ target_include_directories(hardware_driver_canfd
     $<INSTALL_INTERFACE:include>
   PRIVATE src
 )
-target_include_directories(hardware_driver_usb2canfd
-  PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
-  PRIVATE src
-)
+# target_include_directories(hardware_driver_usb2canfd
+#   PUBLIC
+#     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+#     $<INSTALL_INTERFACE:include>
+#   PRIVATE src
+# )
 
 # 设置库的版本信息
 set_target_properties(hardware_driver_canfd PROPERTIES
@@ -108,11 +102,11 @@ set_target_properties(hardware_driver_canfd PROPERTIES
   OUTPUT_NAME "hardware_driver_canfd"
 )
 
-set_target_properties(hardware_driver_usb2canfd PROPERTIES
-  VERSION 3.0.0
-  SOVERSION 2
-  OUTPUT_NAME "hardware_driver_usb2canfd"
-)
+# set_target_properties(hardware_driver_usb2canfd PROPERTIES
+#   VERSION 3.0.0
+#   SOVERSION 2
+#   OUTPUT_NAME "hardware_driver_usb2canfd"
+# )
 
 # 设置库的输出目录到lib文件夹
 set_target_properties(hardware_driver_canfd PROPERTIES
@@ -120,10 +114,10 @@ set_target_properties(hardware_driver_canfd PROPERTIES
   ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
 )
 
-set_target_properties(hardware_driver_usb2canfd PROPERTIES
-  LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
-  ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
-)
+# set_target_properties(hardware_driver_usb2canfd PROPERTIES
+#   LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
+#   ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
+# )
 # === ethercat 组合 ===
 # add_library(hardware_driver_ethercat SHARED
 #   src/bus/ethercat_bus_impl.cpp
@@ -155,7 +149,7 @@ if(EXAMPLE_SOURCES)
     )
     target_link_libraries(${EXAMPLE_NAME}
       hardware_driver_canfd
-      hardware_driver_usb2canfd
+      # hardware_driver_usb2canfd
       ${HARDWARE_DRIVER_LIBS}
     )
   endforeach()
@@ -173,14 +167,14 @@ set_target_properties(hardware_driver_canfd PROPERTIES
   ARCHIVE_OUTPUT_NAME "hardware_driver_canfd"
 )
 
-set_target_properties(hardware_driver_usb2canfd PROPERTIES
-  LIBRARY_OUTPUT_NAME "hardware_driver_usb2canfd"
-  ARCHIVE_OUTPUT_NAME "hardware_driver_usb2canfd"
-)
+# set_target_properties(hardware_driver_usb2canfd PROPERTIES
+#   LIBRARY_OUTPUT_NAME "hardware_driver_usb2canfd"
+#   ARCHIVE_OUTPUT_NAME "hardware_driver_usb2canfd"
+# )
 
 install(TARGETS
   hardware_driver_canfd
-  hardware_driver_usb2canfd
+  # hardware_driver_usb2canfd
   # hardware_driver_ethercat
   EXPORT hardware_driverTargets
   LIBRARY DESTINATION lib
@@ -235,7 +229,7 @@ if(BUILD_TESTS)
         # 链接所需库
         target_link_libraries(${TEST_NAME}
           hardware_driver_canfd
-          hardware_driver_usb2canfd
+          # hardware_driver_usb2canfd
           GTest::gtest
           GTest::gtest_main
           GTest::gmock

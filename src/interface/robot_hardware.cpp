@@ -2,7 +2,7 @@
 #include "hardware_driver/event/motor_events.hpp"
 #include "driver/motor_driver_impl.hpp"
 #include "bus/canfd_bus_impl.hpp"
-#include "bus/usb2canfd_bus_impl.hpp"
+// #include "bus/usb2canfd_bus_impl.hpp"
 #include <chrono>
 #include <thread>
 #include <cstring>
@@ -660,12 +660,12 @@ namespace hardware_driver {
         return std::make_shared<hardware_driver::motor_driver::MotorDriverImpl>(bus);
     }
 
-    std::shared_ptr<motor_driver::MotorDriverInterface> createUsb2CanfdMotorDriver(
-        const std::vector<std::string>& device_sns) {
-        // 创建USB2CANFD总线
-        auto bus = std::make_shared<hardware_driver::bus::Usb2CanfdBus>(device_sns);
-
-        // 创建电机驱动实例
-        return std::make_shared<hardware_driver::motor_driver::MotorDriverImpl>(bus);
-    }
+    // std::shared_ptr<motor_driver::MotorDriverInterface> createUsb2CanfdMotorDriver(
+    //     const std::vector<std::string>& device_sns) {
+    //     // 创建USB2CANFD总线
+    //     auto bus = std::make_shared<hardware_driver::bus::Usb2CanfdBus>(device_sns);
+    //
+    //     // 创建电机驱动实例
+    //     return std::make_shared<hardware_driver::motor_driver::MotorDriverImpl>(bus);
+    // }
 }
