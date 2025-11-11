@@ -16,6 +16,7 @@ public:
                   << "Nm | 温度:" << static_cast<int>(status.temperature) / 10.0 << "°C"
                   << " | 使能:" << static_cast<int>(status.enable_flag)
                   << " | 模式:" << static_cast<int>(status.motor_mode)
+                  << " | 错误:" << static_cast<u_int32_t>(status.error_code)
                   << std::endl;
     }
     
@@ -24,7 +25,7 @@ public:
                                          const std::map<uint32_t, hardware_driver::motor_driver::Motor_Status>& status_all) {
         std::cout << "[批量状态] " << interface << " - " << status_all.size() << "个电机" << std::endl;
         for (const auto& [motor_id, status] : status_all) {
-            std::cout << "  电机" << motor_id << ": " << status.position << "° | " << status.velocity << "°/s" << " | Err" << status.error_code <<std::endl;
+            std::cout << "  电机" << motor_id << ": " << status.position << "° | " << status.velocity << "°/s" << " | Err " << status.error_code <<std::endl;
         }
     }
 };
