@@ -30,6 +30,9 @@ CMakeFiles/
 *.a
 *.exe
 
+# Exception: include pre-built third-party libraries
+!lib/*.a
+
 # IDE文件
 .vscode/
 .idea/

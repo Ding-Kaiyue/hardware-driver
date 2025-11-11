@@ -16,7 +16,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake libgtest-dev libgmock-dev
+        sudo apt-get install -y build-essential cmake libgtest-dev libgmock-dev libusb-1.0-0-dev
 
         # Install ROS 2 Humble
         sudo apt-get install -y software-properties-common
