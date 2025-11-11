@@ -775,7 +775,7 @@ void MotorDriverImpl::notify_parameter_result_observers(const std::string& inter
     }
 }
 
-void MotorDriverImpl::notify_iap_observers(const std::string& interface, uint32_t motor_id, iap_protocol::IAPStatusMessage msg) {
+void MotorDriverImpl::notify_iap_observers(const std::string& interface, uint32_t motor_id, IAPStatus msg) {
     // 保存最新反馈到 map，供 wait_for_feedback 使用
     {
         std::lock_guard<std::mutex> lock(iap_feedback_mutex_);
@@ -935,16 +935,16 @@ void MotorDriverImpl::start_update(const std::string& interface,
         if (iap_protocol::pack_enter_iap_request(packet.data, packet.len)) {
             send_control_command(packet);
         }
-        wait_for_feedback(interface, motor_id, iap_protocol::IAPStatusMessage::AJ01, 2000);
-        wait_for_feedback(interface, motor_id, iap_protocol::IAPStatusMessage::BS00, 3000);
+        wait_for_feedback(interface, motor_id, IAPStatus::AJ01, 2000);
+        wait_for_feedback(interface, motor_id, IAPStatus::BS00, 3000);
 
         // 2. Boot模式下发送key
         if (iap_protocol::pack_send_key(packet.data, packet.len)) {
             send_control_command(packet);
         }
-        wait_for_feedback(interface, motor_id, iap_protocol::IAPStatusMessage::BK01, 2000);
-        wait_for_feedback(interface, motor_id, iap_protocol::IAPStatusMessage::BK02, 2000);
-        wait_for_feedback(interface, motor_id, iap_protocol::IAPStatusMessage::BK03, 2000);
+        wait_for_feedback(interface, motor_id, IAPStatus::BK01, 2000);
+        wait_for_feedback(interface, motor_id, IAPStatus::BK02, 2000);
+        wait_for_feedback(interface, motor_id, IAPStatus::BK03, 2000);
 
         // 3. Boot模式下发送固件数据
         for (size_t offset = 0; offset < firmware_data.size(); offset += 64) {
@@ -955,8 +955,8 @@ void MotorDriverImpl::start_update(const std::string& interface,
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
         }
         // 等待数据接收完成（BJ06 在 500ms 无数据时自动发出）
-        wait_for_feedback(interface, motor_id, iap_protocol::IAPStatusMessage::BJ06, 3000);
-        wait_for_feedback(interface, motor_id, iap_protocol::IAPStatusMessage::AS00, 3000);
+        wait_for_feedback(interface, motor_id, IAPStatus::BJ06, 3000);
+        wait_for_feedback(interface, motor_id, IAPStatus::AS00, 3000);
         std::cout << "[IAP] ✅ Firmware update completed for motor "
                   << interface << ":" << motor_id << std::endl;
     } catch (const std::exception& e) {
@@ -970,7 +970,7 @@ void MotorDriverImpl::start_update(const std::string& interface,
 std::optional<hardware_driver::iap_protocol::IAPFeedback> MotorDriverImpl::wait_for_feedback(
     const std::string& /*interface*/,
     uint32_t motor_id,
-    hardware_driver::iap_protocol::IAPStatusMessage expected_msg,
+    IAPStatus expected_msg,
     uint32_t timeout_ms)
 {
     std::unique_lock<std::mutex> lock(iap_feedback_mutex_);
@@ -990,7 +990,7 @@ std::optional<hardware_driver::iap_protocol::IAPFeedback> MotorDriverImpl::wait_
             std::chrono::steady_clock::now() - start_time);
         if (elapsed.count() > timeout_ms) {
             std::cerr << "[IAP] ❌ Timeout waiting for "
-                      << iap_status_to_string(expected_msg)
+                      << iap_protocol::iap_status_to_string(expected_msg)
                       << " from motor " << motor_id << std::endl;
             return std::nullopt;
         }

@@ -177,7 +177,7 @@ private:
     
     // ===== IAP 反馈处理支持 =====
     // 改用 map 存储每个 motor 的最新反馈，避免顺序依赖
-    std::map<uint32_t, hardware_driver::iap_protocol::IAPStatusMessage> iap_latest_feedback_;
+    std::map<uint32_t, IAPStatus> iap_latest_feedback_;
     std::mutex iap_feedback_mutex_;
     std::condition_variable iap_feedback_cv_;
 
@@ -238,7 +238,7 @@ private:
     void notify_motor_status_observers(const std::string& interface, uint32_t motor_id, const Motor_Status& status);
     void notify_function_result_observers(const std::string& interface, uint32_t motor_id, uint8_t op_code, bool success);
     void notify_parameter_result_observers(const std::string& interface, uint32_t motor_id, uint16_t address, uint8_t data_type, const std::any& data);
-    void notify_iap_observers(const std::string& interface, uint32_t motor_id, iap_protocol::IAPStatusMessage msg);
+    void notify_iap_observers(const std::string& interface, uint32_t motor_id, IAPStatus msg);
 
     // 重复命令检测
     bool is_duplicate_command(const bus::GenericBusPacket& packet);
@@ -256,7 +256,7 @@ private:
     std::optional<hardware_driver::iap_protocol::IAPFeedback> wait_for_feedback(
         const std::string& interface,
         uint32_t motor_id,
-        hardware_driver::iap_protocol::IAPStatusMessage expected,
+        IAPStatus expected,
         uint32_t timeout_ms);
 };
 

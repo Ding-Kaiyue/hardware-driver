@@ -6,7 +6,6 @@
 #include <map>
 #include <any>
 #include <memory>
-#include "protocol/iap_protocol.hpp"  // src/protocol/iap_protocol.hpp
 
 namespace hardware_driver {
 namespace motor_driver {
@@ -26,6 +25,23 @@ typedef struct {
 
     uint32_t error_code;
 } Motor_Status;
+
+/**
+ * @brief IAP设备状态消息枚举
+ * 设备通过CAN-FD发送ASCII编码的4字节状态消息
+ */
+enum class IAPStatus : uint32_t {
+    BS00 = 0x42533030,  // "BS00" - Bootloader启动
+    BK01 = 0x424B3031,  // "BK01" - 收到"key"命令，进入IAP模式
+    BK02 = 0x424B3032,  // "BK02" - 擦除APP程序
+    BK03 = 0x424B3033,  // "BK03" - 准备接收固件数据
+    BD04 = 0x42443034,  // "BD04" - 开始接收数据
+    BD05 = 0x42443035,  // "BD05" - 接收完成（500ms内无数据）
+    BJ06 = 0x424A3036,  // "BJ06" - APP地址正确，准备跳转
+    BJ07 = 0x424A3037,  // "BJ07" - 跳转错误
+    AS00 = 0x41533030,  // "AS00" - APP启动成功
+    AJ01 = 0x414A3031,  // "AJ01" - APP收到IAP更新指令
+};
 
 // 电机状态观察者接口
 class MotorStatusObserver {
@@ -67,7 +83,7 @@ public:
      */
     virtual void on_iap_status_feedback(const std::string& /*interface*/,
                                         uint32_t /*motor_id*/,
-                                        const hardware_driver::iap_protocol::IAPStatusMessage& /*msg*/) {}
+                                        const IAPStatus& /*msg*/) {}
 };
 
 // 事件总线模式的事件处理器接口 - 与观察者模式保持相同的虚函数签名

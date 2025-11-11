@@ -89,23 +89,23 @@ std::optional<IAPFeedback> parse_iap_feedback(const bus::GenericBusPacket& packe
                            packet.data[3];
 
     IAPFeedback fb{};
-    fb.status_msg = static_cast<IAPStatusMessage>(ascii_code);
+    fb.status_msg = static_cast<motor_driver::IAPStatus>(ascii_code);
     fb.motor_id   = packet.id & 0xFF;
     return fb;
 }
 
-std::string iap_status_to_string(IAPStatusMessage msg) {
+std::string iap_status_to_string(motor_driver::IAPStatus msg) {
     switch (msg) {
-        case IAPStatusMessage::BS00: return "BS00";
-        case IAPStatusMessage::BK01: return "BK01";
-        case IAPStatusMessage::BK02: return "BK02";
-        case IAPStatusMessage::BK03: return "BK03";
-        case IAPStatusMessage::BD04: return "BD04";
-        case IAPStatusMessage::BD05: return "BD05";
-        case IAPStatusMessage::BJ06: return "BJ06";
-        case IAPStatusMessage::BJ07: return "BJ07";
-        case IAPStatusMessage::AS00: return "AS00";
-        case IAPStatusMessage::AJ01: return "AJ01";
+        case motor_driver::IAPStatus::BS00: return "BS00";
+        case motor_driver::IAPStatus::BK01: return "BK01";
+        case motor_driver::IAPStatus::BK02: return "BK02";
+        case motor_driver::IAPStatus::BK03: return "BK03";
+        case motor_driver::IAPStatus::BD04: return "BD04";
+        case motor_driver::IAPStatus::BD05: return "BD05";
+        case motor_driver::IAPStatus::BJ06: return "BJ06";
+        case motor_driver::IAPStatus::BJ07: return "BJ07";
+        case motor_driver::IAPStatus::AS00: return "AS00";
+        case motor_driver::IAPStatus::AJ01: return "AJ01";
         default: return "UNKNOWN";
     }
 }

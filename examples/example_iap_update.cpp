@@ -22,17 +22,22 @@ class IAPObserver : public hardware_driver::motor_driver::IAPStatusObserver {
 public:
     void on_iap_status_feedback(const std::string& interface,
                                 uint32_t motor_id,
-                                const hardware_driver::iap_protocol::IAPStatusMessage& msg) override {
-        using namespace hardware_driver::iap_protocol;
-        std::cout << "[IAP反馈] " << interface << ":" << motor_id << " -> "
-                  << iap_status_to_string(msg) << std::endl;
+                                const IAPStatus& msg) override {
+        std::cout << "[IAP反馈] " << interface << ":" << motor_id << " -> ";
+
+        // 根据状态值打印对应的状态消息
         switch (msg) {
-            case IAPStatusMessage::BS00: std::cout << "  Bootloader 启动\n"; break;
-            case IAPStatusMessage::BK01: std::cout << "  收到 Key，进入 IAP 模式\n"; break;
-            case IAPStatusMessage::BK03: std::cout << "  开始接收固件数据\n"; break;
-            case IAPStatusMessage::BD05: std::cout << "  数据接收完成，校验中\n"; break;
-            case IAPStatusMessage::AS00: std::cout << "  APP 启动成功 ✅\n"; break;
-            default: break;
+            case IAPStatus::BS00: std::cout << "BS00 (Bootloader启动)\n"; break;
+            case IAPStatus::BK01: std::cout << "BK01 (收到Key，进入IAP模式)\n"; break;
+            case IAPStatus::BK02: std::cout << "BK02 (擦除APP程序)\n"; break;
+            case IAPStatus::BK03: std::cout << "BK03 (准备接收固件数据)\n"; break;
+            case IAPStatus::BD04: std::cout << "BD04 (开始接收数据)\n"; break;
+            case IAPStatus::BD05: std::cout << "BD05 (数据接收完成)\n"; break;
+            case IAPStatus::BJ06: std::cout << "BJ06 (APP地址正确，准备跳转)\n"; break;
+            case IAPStatus::BJ07: std::cout << "BJ07 (跳转错误)\n"; break;
+            case IAPStatus::AS00: std::cout << "AS00 (APP启动成功 ✅)\n"; break;
+            case IAPStatus::AJ01: std::cout << "AJ01 (APP收到IAP更新指令)\n"; break;
+            default: std::cout << "Unknown status: " << static_cast<uint32_t>(msg) << "\n"; break;
         }
     }
 };
