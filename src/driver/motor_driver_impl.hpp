@@ -106,13 +106,13 @@ public:
     void enable_motor(const std::string interface, const uint32_t motor_id, uint8_t mode) override;
     void enable_all_motors(const std::string interface, std::vector<uint32_t> motor_ids, uint8_t mode) override;
     void send_mit_cmd(const std::string interface, const uint32_t motor_id, float position, float velocity, float effort, 
-                    float kp = 0.05, float kd = 0.01) override;
+                    float kp = 0.05, float kd = 0.005) override;
     void send_position_cmd(const std::string interface, const uint32_t motor_id, float position,
-                    float kp = 0.05, float kd = 0.01) override;
+                    float kp = 0.05, float kd = 0.005) override;
     void send_velocity_cmd(const std::string interface, const uint32_t motor_id, float velocity,
-                    float kp = 0.05, float kd = 0.01) override;
+                    float kp = 0.05, float kd = 0.005) override;
     void send_effort_cmd(const std::string interface, const uint32_t motor_id, float effort,
-                    float kp = 0.05, float kd = 0.01) override;
+                    float kp = 0.05, float kd = 0.005) override;
     void send_control_cmd(const std::string interface, std::vector<float> positions, std::vector<float> velocities, std::vector<float> efforts,
                     std::vector<float> kps, std::vector<float> kds) override;
 
