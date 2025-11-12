@@ -30,9 +30,6 @@ namespace hardware_driver {
         class CanFdBus;
         // class Usb2CanFdBus;
     }
-    namespace motor_protocol {
-        enum MotorControlMode;
-    }
 }
 
 // 工厂函数声明 - 用于创建具体的驱动实例
