@@ -178,21 +178,13 @@ int main() {
         robot->enable_motors("can0", {motor5, motor6}, mit_mode);
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-        std::cout << "按Enter执行电机5和6运动到90和-90度，速度10和-10度/秒...";
+        std::cout << "按Enter执行电机5和6运动到5和-5度(位置差距过大时，电流会过大，导致断电，请谨慎操作)...";
         robot->pause_status_monitoring();
         std::cin.get();
         robot->resume_status_monitoring();
-        robot->control_motor_in_mit_mode("can0", motor5, 90.0, 0.0, -3.0);
-        robot->control_motor_in_mit_mode("can0", motor6, 90.0, 0.0, 5.0);
+        robot->control_motor_in_mit_mode("can0", motor5, 5.0, 0.0, -0.0);
+        robot->control_motor_in_mit_mode("can0", motor6, -5.0, 0.0, 0.0);
         std::this_thread::sleep_for(std::chrono::seconds(3));
-
-        std::cout << "按Enter停止电机5和6...";
-        robot->pause_status_monitoring();
-        std::cin.get();
-        robot->resume_status_monitoring();
-        robot->control_motor_in_mit_mode("can0", motor5, 90.0, 0.0, 0.0);
-        robot->control_motor_in_mit_mode("can0", motor6, -90.0, 0.0, 0.0);
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
         std::cout << "按Enter失能电机5和6...";
         robot->pause_status_monitoring();

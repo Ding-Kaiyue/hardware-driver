@@ -95,10 +95,10 @@ public:
     // 状态获取通过回调机制实现，不需要主动查询接口
     
     // ========== 电机控制接口 ==========
-    void control_motor_in_mit_mode(const std::string& interface, const uint32_t motor_id, float position, float velocity, float effort, float kp = 0.0, float kd = 0.0);
-    void control_motor_in_position_mode(const std::string& interface, const uint32_t motor_id, float position, float kp = 0.0, float kd = 0.0);
-    void control_motor_in_velocity_mode(const std::string& interface, const uint32_t motor_id, float velocity, float kp = 0.0, float kd = 0.0);
-    void control_motor_in_effort_mode(const std::string& interface, const uint32_t motor_id, float effort, float kp = 0.0, float kd = 0.0);
+    void control_motor_in_mit_mode(const std::string& interface, const uint32_t motor_id, float position, float velocity, float effort, float kp = 0.05, float kd = 0.005);
+    void control_motor_in_position_mode(const std::string& interface, const uint32_t motor_id, float position, float kp = 0.05, float kd = 0.005);
+    void control_motor_in_velocity_mode(const std::string& interface, const uint32_t motor_id, float velocity, float kp = 0.0, float kd = 0.005);
+    void control_motor_in_effort_mode(const std::string& interface, const uint32_t motor_id, float effort, float kp = 0.05, float kd = 0.005);
     void disable_motor(const std::string& interface, const uint32_t motor_id, uint8_t mode);
     void enable_motor(const std::string& interface, const uint32_t motor_id, uint8_t mode);
     
