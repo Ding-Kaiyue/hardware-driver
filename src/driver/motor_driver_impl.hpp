@@ -123,14 +123,18 @@ public:
 
     // 批量控制接口（广播给所有电机，支持最多 6 个）
     void send_position_cmd_all(const std::string interface, const std::array<float, 6>& positions,
-                              const std::array<float, 6>& kps, const std::array<float, 6>& kds) override;
+                              const std::array<float, 6>& kps = {0.05, 0.05, 0.05, 0.05, 0.05, 0.05}, 
+                              const std::array<float, 6>& kds = {0.005, 0.005, 0.005, 0.005, 0.005, 0.005}) override;
     void send_velocity_cmd_all(const std::string interface, const std::array<float, 6>& velocities,
-                              const std::array<float, 6>& kps, const std::array<float, 6>& kds) override;
+                              const std::array<float, 6>& kps = {0.05f, 0.05f, 0.05f, 0.05f, 0.05f, 0.05f},
+                              const std::array<float, 6>& kds = {0.005f, 0.005f, 0.005f, 0.005f, 0.005f, 0.005f}) override;
     void send_effort_cmd_all(const std::string interface, const std::array<float, 6>& efforts,
-                            const std::array<float, 6>& kps, const std::array<float, 6>& kds) override;
+                            const std::array<float, 6>& kps = {0.05f, 0.05f, 0.05f, 0.05f, 0.05f, 0.05f},
+                            const std::array<float, 6>& kds = {0.005f, 0.005f, 0.005f, 0.005f, 0.005f, 0.005f}) override;
     void send_mit_cmd_all(const std::string interface, const std::array<float, 6>& positions,
                          const std::array<float, 6>& velocities, const std::array<float, 6>& efforts,
-                         const std::array<float, 6>& kps, const std::array<float, 6>& kds) override;
+                         const std::array<float, 6>& kps = {0.05f, 0.05f, 0.05f, 0.05f, 0.05f, 0.05f},
+                         const std::array<float, 6>& kds = {0.005f, 0.005f, 0.005f, 0.005f, 0.005f, 0.005f}) override;
 
     // IAP固件更新接口
     /**

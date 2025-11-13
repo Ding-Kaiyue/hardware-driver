@@ -543,16 +543,16 @@ bool RobotHardware::execute_trajectory(const std::string& interface, const Traje
 
             // 使用批量控制发送所有电机的位置命令
             std::array<float, 6> positions = {};
-            std::array<float, 6> kps = {};
-            std::array<float, 6> kds = {};
+            std::array<float, 6> velocities = {};
+            std::array<float, 6> efforts = {};
 
             for (size_t i = 0; i < motor_ids.size(); ++i) {
                 float position = (i < point.positions.size()) ? static_cast<float>(point.positions[i]) : 0.0f;
                 positions[i] = position;
             }
 
-            // 调用批量位置控制接口（kps 和 kds 为空，使用默认值）
-            motor_driver_->send_position_cmd_all(interface, positions, kps, kds);
+            // 调用批量MIT控制接口（kps 和 kds 使用默认值 0.05 和 0.005）
+            motor_driver_->send_mit_cmd_all(interface, positions, velocities, efforts);
 
             // 更新进度（供进度条线程使用）
             current_point.store(point_idx + 1);
