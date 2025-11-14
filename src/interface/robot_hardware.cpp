@@ -100,16 +100,6 @@ RobotHardware::RobotHardware(
         motor_driver_impl->set_motor_config(interface_motor_config_);
 
         std::cout << "RobotHardware initialized with Observer - status updates will be handled by observer" << std::endl;
-
-        // 调试输出：显示配置的电机
-        std::cerr << "[DEBUG RobotHardware] Observer mode - configured motors:" << std::endl;
-        for (const auto& [interface, motor_ids] : interface_motor_config_) {
-            std::cerr << "  Interface " << interface << ": ";
-            for (uint32_t motor_id : motor_ids) {
-                std::cerr << motor_id << " ";
-            }
-            std::cerr << std::endl;
-        }
     }
 }
 
