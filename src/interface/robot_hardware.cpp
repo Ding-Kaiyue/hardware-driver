@@ -549,6 +549,7 @@ bool RobotHardware::execute_trajectory(const std::string& interface, const Traje
             for (size_t i = 0; i < motor_ids.size(); ++i) {
                 float position = (i < point.positions.size()) ? static_cast<float>(point.positions[i]) : 0.0f;
                 positions[i] = position;
+                
             }
 
             // 调用批量MIT控制接口（kps 和 kds 使用默认值 0.05 和 0.005）
