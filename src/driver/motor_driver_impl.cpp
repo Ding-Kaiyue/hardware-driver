@@ -563,7 +563,20 @@ void MotorDriverImpl::handle_bus_packet(const bus::GenericBusPacket& packet) {
     }
 
     auto feedback_opt = motor_protocol::parse_feedback(packet);
-    if (!feedback_opt) return;
+    if (!feedback_opt) {
+        // 调试：未能解析反馈数据 - 记录所有无法解析的包
+        uint32_t id = packet.id;
+        uint32_t base = id & 0xFFFFFF00;
+        uint8_t motor_id = id & 0xFF;
+
+        if (base != 0xFFFFFF00 && base != 0x000) {  // 不是广播ID或空ID
+            std::cerr << "[DEBUG] Failed to parse feedback - interface: " << packet.interface
+                     << " ID: 0x" << std::hex << packet.id << std::dec
+                     << " (base: 0x" << std::hex << base << std::dec
+                     << ", motor: " << static_cast<int>(motor_id) << ")" << std::endl;
+        }
+        return;
+    }
 
     // 使用std::visit处理不同类型的反馈
     std::visit([this](auto&& feedback) {
@@ -572,27 +585,33 @@ void MotorDriverImpl::handle_bus_packet(const bus::GenericBusPacket& packet) {
         if constexpr (std::is_same_v<T, motor_protocol::MotorStatusFeedback>) {
             // 处理电机状态反馈 - 使用线程安全哈希表，只保存最新状态
             Motor_Key key{feedback.interface, feedback.motor_id};
-            
+
             // 使用shared_mutex的写锁进行更新
             {
                 std::unique_lock<std::shared_mutex> lock(status_map_mutex_);
                 status_map_[key] = feedback.status;  // 线程安全更新状态
             }
-            
+
             // 立即调用回调函数（向后兼容）
             if (feedback_callback_) {
                 feedback_callback_(feedback.interface, feedback.motor_id, feedback.status);
             }
-            
+
             // 通知所有观察者
             notify_motor_status_observers(feedback.interface, feedback.motor_id, feedback.status);
-            
+
             // 发布事件总线事件
             emit_motor_status_event(feedback.interface, feedback.motor_id, feedback.status);
-            
+
+            // 调试输出：重点记录电机5和6的反馈
+            if (feedback.motor_id >= 5) {
+                std::cerr << "[DEBUG] Motor " << feedback.motor_id << " feedback: "
+                         << feedback.interface << " pos=" << feedback.status.position << std::endl;
+            }
+
 #ifdef PRINT_DEBUG
-            std::cout << "Interface: " << feedback.interface << " Motor ID: " 
-            << feedback.motor_id << " enable_flag: " << feedback.status.enable_flag 
+            std::cout << "Interface: " << feedback.interface << " Motor ID: "
+            << feedback.motor_id << " enable_flag: " << feedback.status.enable_flag
             << " motor_mode: " << feedback.status.motor_mode << " position: " << feedback.status.position
             << " limit_flag: " << feedback.status.limit_flag << " temperature: " << feedback.status.temperature
             << " velocity: " << feedback.status.velocity << " voltage: " << feedback.status.voltage
@@ -721,7 +740,11 @@ void MotorDriverImpl::remove_iap_observer(std::shared_ptr<IAPStatusObserver> obs
 
 void MotorDriverImpl::notify_motor_status_observers(const std::string& interface, uint32_t motor_id, const Motor_Status& status) {
     std::lock_guard<std::mutex> lock(observers_mutex_);
-    
+
+    // 调试：记录观察者数量
+    std::cerr << "[DEBUG] Notifying " << observers_.size() << " observer(s) for motor "
+             << interface << ":" << motor_id << std::endl;
+
     // 使用迭代器遍历，自动清理失效的观察者
     for (auto it = observers_.begin(); it != observers_.end(); ) {
         if (auto observer = it->lock()) {
