@@ -1,6 +1,7 @@
 #include "hardware_driver/interface/robot_hardware.hpp"
 #include "hardware_driver/event/motor_events.hpp"
 #include "driver/motor_driver_impl.hpp"
+#include "driver/gripper_driver_impl.hpp"
 #include "bus/canfd_bus_impl.hpp"
 // #include "bus/usb2canfd_bus_impl.hpp"
 #include <chrono>
@@ -272,7 +273,7 @@ void RobotHardware::handle_motor_status_with_aggregation(const std::string& inte
     }
 }
 
-// ========== 电机控制接口 ==========
+// 电机控制接口 
 // 简化控制接口 - 时间控制由motor_driver_impl内部处理
 
 void RobotHardware::control_motor_in_position_mode(const std::string& interface, const uint32_t motor_id, float position,
@@ -303,7 +304,7 @@ void RobotHardware::enable_motor(const std::string& interface, const uint32_t mo
     motor_driver_->enable_motor(interface, motor_id, mode);
 }
 
-// ========== 实时批量控制接口 ==========
+// 实时批量控制接口 
 void RobotHardware::disable_motors(const std::string& interface, const std::vector<uint32_t>& motor_ids, uint8_t mode) {
     motor_driver_->disable_all_motors(interface, motor_ids, mode);
 }
@@ -466,7 +467,7 @@ bool RobotHardware::send_realtime_mit_command(const std::string& interface,
     }
 }
 
-// ========== 轨迹执行接口 ==========
+//  轨迹执行接口 
 bool RobotHardware::execute_trajectory(const std::string& interface, const Trajectory& trajectory) {
     auto config_it = interface_motor_config_.find(interface);
     if (config_it == interface_motor_config_.end()) {
@@ -649,7 +650,68 @@ void RobotHardware::resume_status_monitoring() {
     }
 }
 
-// ========== 工厂函数实现 ==========
+// 夹爪驱动设置方法实现
+void RobotHardware::set_gripper_driver(
+    std::shared_ptr<hardware_driver::gripper_driver::GripperDriverInterface> gripper_driver) {
+    gripper_driver_ = std::move(gripper_driver);
+    if (gripper_driver_) {
+        std::cout << "[RobotHardware] Gripper driver initialized successfully" << std::endl;
+    }
+}
+
+// 夹爪控制方法实现
+void RobotHardware::control_gripper(const std::string& interface,
+                                   uint8_t gripper_type,
+                                   uint8_t position,
+                                   uint8_t velocity,
+                                   uint8_t effort) {
+    if (!gripper_driver_) {
+        std::cerr << "[RobotHardware] Gripper driver not initialized" << std::endl;
+        return;
+    }
+
+    auto type = static_cast<hardware_driver::gripper_driver::GripperType>(gripper_type);
+    gripper_driver_->control_gripper(interface, type, position, velocity, effort);
+}
+
+void RobotHardware::open_gripper(const std::string& interface,
+                                uint8_t gripper_type,
+                                uint8_t velocity,
+                                uint8_t effort) {
+    if (!gripper_driver_) {
+        std::cerr << "[RobotHardware] Gripper driver not initialized" << std::endl;
+        return;
+    }
+
+    auto type = static_cast<hardware_driver::gripper_driver::GripperType>(gripper_type);
+    gripper_driver_->open_gripper(interface, type, velocity, effort);
+}
+
+void RobotHardware::close_gripper(const std::string& interface,
+                                 uint8_t gripper_type,
+                                 uint8_t velocity,
+                                 uint8_t effort) {
+    if (!gripper_driver_) {
+        std::cerr << "[RobotHardware] Gripper driver not initialized" << std::endl;
+        return;
+    }
+
+    auto type = static_cast<hardware_driver::gripper_driver::GripperType>(gripper_type);
+    gripper_driver_->close_gripper(interface, type, velocity, effort);
+}
+
+void RobotHardware::send_gripper_raw_data(const std::string& interface,
+                                         const uint8_t* raw_data,
+                                         size_t raw_data_len) {
+    if (!gripper_driver_) {
+        std::cerr << "[RobotHardware] Gripper driver not initialized" << std::endl;
+        return;
+    }
+
+    gripper_driver_->send_raw_data(interface, raw_data, raw_data_len);
+}
+
+// 工厂函数实现 
 namespace hardware_driver {
     std::shared_ptr<motor_driver::MotorDriverInterface> createCanFdMotorDriver(
         const std::vector<std::string>& interfaces) {
@@ -658,6 +720,15 @@ namespace hardware_driver {
 
         // 创建电机驱动实例
         return std::make_shared<hardware_driver::motor_driver::MotorDriverImpl>(bus);
+    }
+
+    std::shared_ptr<gripper_driver::GripperDriverInterface> createCanFdGripperDriver(
+        const std::vector<std::string>& interfaces) {
+        // 创建CANFD总线
+        auto bus = std::make_shared<hardware_driver::bus::CanFdBus>(interfaces);
+
+        // 创建夹爪驱动实例
+        return std::make_shared<hardware_driver::gripper_driver::GripperDriverImpl>(bus);
     }
 
     // std::shared_ptr<motor_driver::MotorDriverInterface> createUsb2CanfdMotorDriver(
