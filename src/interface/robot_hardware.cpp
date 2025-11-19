@@ -649,6 +649,491 @@ void RobotHardware::resume_status_monitoring() {
     }
 }
 
+// ========== 异步轨迹执行实现（新的简化版本） ==========
+
+std::string RobotHardware::execute_trajectory_async(
+    const std::string& interface,
+    const Trajectory& trajectory,
+    bool show_progress) {
+
+    // 检查接口是否存在
+    auto config_it = interface_motor_config_.find(interface);
+    if (config_it == interface_motor_config_.end()) {
+        return "";
+    }
+
+    if (trajectory.points.empty()) {
+        return "";
+    }
+
+    // 检查该接口是否已有执行中的轨迹（包括IDLE、RUNNING、PAUSED状态）
+    {
+        std::shared_lock<std::shared_mutex> lock(trajectory_tasks_mutex_);
+        for (const auto& [exec_id, task] : trajectory_execution_tasks_) {
+            if (task->interface == interface) {
+                auto state = task->state.load();
+                // 任何非终止状态都表示轨迹占用了接口
+                if (state != TrajectoryExecutionState::COMPLETED &&
+                    state != TrajectoryExecutionState::CANCELLED &&
+                    state != TrajectoryExecutionState::ERROR) {
+                    return "";
+                }
+            }
+        }
+    }
+
+    // 生成执行ID并创建执行任务
+    std::string execution_id = generate_execution_id();
+    auto task = std::make_shared<TrajectoryExecutionTask>();
+    task->execution_id = execution_id;
+    task->interface = interface;
+    task->trajectory = trajectory;
+    task->state = TrajectoryExecutionState::IDLE;
+    task->show_progress = show_progress;
+
+    // 添加到任务队列
+    {
+        std::unique_lock<std::shared_mutex> lock(trajectory_tasks_mutex_);
+        trajectory_execution_tasks_[execution_id] = task;
+    }
+
+    // 启动执行线程
+    task->executor_thread = std::thread(&RobotHardware::trajectory_execution_worker, this, task);
+
+    return execution_id;
+}
+
+bool RobotHardware::pause_trajectory(const std::string& execution_id) {
+    std::shared_lock<std::shared_mutex> lock(trajectory_tasks_mutex_);
+
+    auto it = trajectory_execution_tasks_.find(execution_id);
+    if (it == trajectory_execution_tasks_.end()) {
+        return false;
+    }
+
+    auto task = it->second;
+    auto state = task->state.load();
+
+    if (state == TrajectoryExecutionState::RUNNING) {
+        {
+            std::unique_lock<std::mutex> state_lock(task->state_mutex);
+            task->should_pause = true;
+            task->state = TrajectoryExecutionState::PAUSED;
+        }
+        task->state_cv.notify_one();
+        return true;
+    }
+
+    return false;
+}
+
+bool RobotHardware::resume_trajectory(const std::string& execution_id) {
+    std::shared_lock<std::shared_mutex> lock(trajectory_tasks_mutex_);
+
+    auto it = trajectory_execution_tasks_.find(execution_id);
+    if (it == trajectory_execution_tasks_.end()) {
+        return false;
+    }
+
+    auto task = it->second;
+    auto state = task->state.load();
+
+    if (state == TrajectoryExecutionState::PAUSED) {
+        {
+            std::unique_lock<std::mutex> state_lock(task->state_mutex);
+            task->should_pause = false;
+            task->pause_elapsed += std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - task->pause_start_time);
+            task->state = TrajectoryExecutionState::RUNNING;
+        }
+        task->state_cv.notify_one();
+        return true;
+    }
+
+    return false;
+}
+
+bool RobotHardware::cancel_trajectory(const std::string& execution_id) {
+    std::shared_lock<std::shared_mutex> lock(trajectory_tasks_mutex_);
+
+    auto it = trajectory_execution_tasks_.find(execution_id);
+    if (it == trajectory_execution_tasks_.end()) {
+        return false;
+    }
+
+    auto task = it->second;
+    auto state = task->state.load();
+
+    if (state == TrajectoryExecutionState::RUNNING || state == TrajectoryExecutionState::PAUSED) {
+        {
+            std::unique_lock<std::mutex> state_lock(task->state_mutex);
+            task->should_stop = true;
+            task->state = TrajectoryExecutionState::CANCELLED;
+        }
+        task->state_cv.notify_one();
+        return true;
+    }
+
+    return false;
+}
+
+bool RobotHardware::get_execution_progress(const std::string& execution_id,
+                                          TrajectoryExecutionProgress& progress) {
+    std::shared_lock<std::shared_mutex> lock(trajectory_tasks_mutex_);
+
+    auto it = trajectory_execution_tasks_.find(execution_id);
+    if (it == trajectory_execution_tasks_.end()) {
+        return false;
+    }
+
+    auto task = it->second;
+
+    {
+        std::unique_lock<std::mutex> state_lock(task->state_mutex);
+
+        progress.state = task->state.load();
+        progress.current_point_index = task->current_point_index.load();
+        progress.total_points = task->trajectory.points.size();
+        progress.error_message = task->error_message;
+
+        // 计算进度百分比
+        if (progress.total_points > 0) {
+            progress.progress_percentage = (static_cast<double>(progress.current_point_index) / progress.total_points) * 100.0;
+        } else {
+            progress.progress_percentage = 0.0;
+        }
+
+        auto now = std::chrono::steady_clock::now();
+        progress.elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(now - task->start_time) - task->pause_elapsed;
+
+        auto total_time = get_trajectory_total_time(task->trajectory);
+        progress.estimated_remaining_time = total_time - progress.elapsed_time;
+        if (progress.estimated_remaining_time.count() < 0) {
+            progress.estimated_remaining_time = std::chrono::milliseconds(0);
+        }
+    }
+
+    return true;
+}
+
+std::vector<std::string> RobotHardware::get_active_execution_ids() const {
+    std::shared_lock<std::shared_mutex> lock(trajectory_tasks_mutex_);
+
+    std::vector<std::string> active_ids;
+    for (const auto& [exec_id, task] : trajectory_execution_tasks_) {
+        auto state = task->state.load();
+        if (state == TrajectoryExecutionState::RUNNING ||
+            state == TrajectoryExecutionState::PAUSED) {
+            active_ids.push_back(exec_id);
+        }
+    }
+
+    return active_ids;
+}
+
+bool RobotHardware::has_execution(const std::string& execution_id) const {
+    std::shared_lock<std::shared_mutex> lock(trajectory_tasks_mutex_);
+    return trajectory_execution_tasks_.find(execution_id) != trajectory_execution_tasks_.end();
+}
+
+bool RobotHardware::wait_for_completion(const std::string& execution_id, int timeout_ms) {
+    std::shared_ptr<TrajectoryExecutionTask> task;
+
+    {
+        std::shared_lock<std::shared_mutex> lock(trajectory_tasks_mutex_);
+        auto it = trajectory_execution_tasks_.find(execution_id);
+        if (it == trajectory_execution_tasks_.end()) {
+            return false;
+        }
+        task = it->second;
+    }
+
+    std::unique_lock<std::mutex> state_lock(task->state_mutex);
+
+    auto pred = [task]() {
+        auto state = task->state.load();
+        return state == TrajectoryExecutionState::COMPLETED ||
+               state == TrajectoryExecutionState::CANCELLED ||
+               state == TrajectoryExecutionState::ERROR;
+    };
+
+    if (timeout_ms == 0) {
+        task->state_cv.wait(state_lock, pred);
+        return true;
+    } else {
+        return task->state_cv.wait_for(state_lock, std::chrono::milliseconds(timeout_ms), pred);
+    }
+}
+
+void RobotHardware::pause_all_trajectories() {
+    std::shared_lock<std::shared_mutex> lock(trajectory_tasks_mutex_);
+
+    for (const auto& [exec_id, task] : trajectory_execution_tasks_) {
+        if (task->state.load() == TrajectoryExecutionState::RUNNING) {
+            {
+                std::unique_lock<std::mutex> state_lock(task->state_mutex);
+                task->should_pause = true;
+                task->state = TrajectoryExecutionState::PAUSED;
+            }
+            task->state_cv.notify_one();
+        }
+    }
+}
+
+void RobotHardware::resume_all_trajectories() {
+    std::shared_lock<std::shared_mutex> lock(trajectory_tasks_mutex_);
+
+    for (const auto& [exec_id, task] : trajectory_execution_tasks_) {
+        if (task->state.load() == TrajectoryExecutionState::PAUSED) {
+            {
+                std::unique_lock<std::mutex> state_lock(task->state_mutex);
+                task->should_pause = false;
+                task->pause_elapsed += std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - task->pause_start_time);
+                task->state = TrajectoryExecutionState::RUNNING;
+            }
+            task->state_cv.notify_one();
+        }
+    }
+}
+
+void RobotHardware::cancel_all_trajectories() {
+    std::shared_lock<std::shared_mutex> lock(trajectory_tasks_mutex_);
+
+    for (const auto& [exec_id, task] : trajectory_execution_tasks_) {
+        auto state = task->state.load();
+        if (state == TrajectoryExecutionState::RUNNING ||
+            state == TrajectoryExecutionState::PAUSED) {
+            {
+                std::unique_lock<std::mutex> state_lock(task->state_mutex);
+                task->should_stop = true;
+                task->state = TrajectoryExecutionState::CANCELLED;
+            }
+            task->state_cv.notify_one();
+        }
+    }
+}
+
+size_t RobotHardware::get_active_trajectory_count() const {
+    std::shared_lock<std::shared_mutex> lock(trajectory_tasks_mutex_);
+
+    size_t count = 0;
+    for (const auto& [exec_id, task] : trajectory_execution_tasks_) {
+        auto state = task->state.load();
+        if (state == TrajectoryExecutionState::RUNNING ||
+            state == TrajectoryExecutionState::PAUSED) {
+            count++;
+        }
+    }
+
+    return count;
+}
+
+// 私有执行线程函数
+void RobotHardware::trajectory_execution_worker(std::shared_ptr<TrajectoryExecutionTask> task) {
+    try {
+        auto config_it = interface_motor_config_.find(task->interface);
+        if (config_it == interface_motor_config_.end()) {
+            std::unique_lock<std::mutex> state_lock(task->state_mutex);
+            task->state = TrajectoryExecutionState::ERROR;
+            task->error_message = "Interface not found";
+            state_lock.unlock();
+            task->state_cv.notify_all();
+            return;
+        }
+
+        const auto& motor_ids = config_it->second;
+        size_t total_points = task->trajectory.points.size();
+
+        // 更新状态为RUNNING
+        {
+            std::unique_lock<std::mutex> state_lock(task->state_mutex);
+            task->state = TrajectoryExecutionState::RUNNING;
+            task->start_time = std::chrono::steady_clock::now();
+            task->current_point_index = 0;
+        }
+
+        // 打开进度条输出
+        FILE* tty = nullptr;
+        if (task->show_progress) {
+            tty = fopen(progress_display_tty_.c_str(), "w");
+            if (!tty) {
+                tty = stderr;
+            }
+        }
+
+        auto last_progress_update = std::chrono::steady_clock::now();
+
+        // 执行轨迹
+        for (size_t point_idx = 0; point_idx < total_points; ++point_idx) {
+            // 检查是否应该停止或暂停
+            {
+                std::unique_lock<std::mutex> state_lock(task->state_mutex);
+
+                if (task->should_stop) {
+                    task->state = TrajectoryExecutionState::CANCELLED;
+                    state_lock.unlock();
+
+                    if (tty && tty != stderr) {
+                        fclose(tty);
+                    }
+                    return;
+                }
+
+                // 处理暂停
+                while (task->should_pause) {
+                    if (task->pause_start_time == std::chrono::steady_clock::time_point()) {
+                        task->pause_start_time = std::chrono::steady_clock::now();
+                    }
+
+                    state_lock.unlock();
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    state_lock.lock();
+                }
+            }
+
+            const auto& point = task->trajectory.points[point_idx];
+
+            // 计算目标时间并等待（考虑暂停时间偏移）
+            auto adjusted_start = task->start_time + task->pause_elapsed;
+            auto target_time = adjusted_start + std::chrono::duration<double>(point.time_from_start);
+            auto current_time = std::chrono::steady_clock::now();
+
+            if (current_time < target_time) {
+                std::this_thread::sleep_until(target_time);
+            }
+
+            // 发送控制命令
+            std::array<float, 6> positions = {};
+            std::array<float, 6> velocities = {};
+            std::array<float, 6> efforts = {};
+
+            for (size_t i = 0; i < motor_ids.size(); ++i) {
+                float position = (i < point.positions.size()) ? static_cast<float>(point.positions[i]) : 0.0f;
+                positions[i] = position;
+            }
+
+            motor_driver_->send_mit_cmd_all(task->interface, positions, velocities, efforts);
+
+            // 更新进度
+            {
+                std::unique_lock<std::mutex> state_lock(task->state_mutex);
+                task->current_point_index = point_idx + 1;
+            }
+
+            // 显示进度条（仅当 show_progress 为 true 时）
+            if (task->show_progress && tty) {
+                auto now = std::chrono::steady_clock::now();
+                if (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_progress_update).count() >= 100) {
+                    display_trajectory_progress(task);
+                    last_progress_update = now;
+                }
+            }
+        }
+
+        // 执行完成
+        {
+            std::unique_lock<std::mutex> state_lock(task->state_mutex);
+            task->state = TrajectoryExecutionState::COMPLETED;
+            task->current_point_index = total_points;
+        }
+
+        // 显示最终进度
+        if (task->show_progress && tty) {
+            display_trajectory_progress(task);
+            fprintf(tty, "\n");
+            fflush(tty);
+        }
+
+        if (tty && tty != stderr) {
+            fclose(tty);
+        }
+
+        task->state_cv.notify_all();
+
+    } catch (const std::exception& e) {
+        std::unique_lock<std::mutex> state_lock(task->state_mutex);
+        task->state = TrajectoryExecutionState::ERROR;
+        task->error_message = std::string(e.what());
+        state_lock.unlock();
+        task->state_cv.notify_all();
+    }
+}
+
+std::string RobotHardware::generate_execution_id() {
+    static std::atomic<uint64_t> counter{0};
+    auto id = counter.fetch_add(1);
+    return "exec_" + std::to_string(id) + "_" +
+           std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+}
+
+void RobotHardware::display_trajectory_progress(const std::shared_ptr<TrajectoryExecutionTask>& task) {
+    FILE* tty = fopen(progress_display_tty_.c_str(), "w");
+    if (!tty) {
+        tty = stderr;
+    }
+
+    TrajectoryExecutionProgress progress;
+    if (!get_execution_progress(task->execution_id, progress)) {
+        if (tty && tty != stderr) {
+            fclose(tty);
+        }
+        return;
+    }
+
+    if (progress.total_points > 0) {
+        int bar_width = 30;
+        double progress_percentage = (static_cast<double>(progress.current_point_index) / progress.total_points) * 100.0;
+        int filled = static_cast<int>((progress_percentage / 100.0) * bar_width);
+
+        fprintf(tty, "\r[%s] [", task->interface.c_str());
+        for (int i = 0; i < bar_width; ++i) {
+            if (i < filled) fprintf(tty, "█");
+            else fprintf(tty, "░");
+        }
+        fprintf(tty, "] %.0f%% 点 %zu/%zu | 耗时: %ldms   ",
+                progress_percentage,
+                progress.current_point_index,
+                progress.total_points,
+                static_cast<long>(progress.elapsed_time.count()));
+        fflush(tty);
+    }
+
+    if (tty && tty != stderr) {
+        fclose(tty);
+    }
+}
+
+std::chrono::milliseconds RobotHardware::get_trajectory_total_time(const Trajectory& trajectory) const {
+    if (trajectory.points.empty()) {
+        return std::chrono::milliseconds(0);
+    }
+    return std::chrono::milliseconds(
+        static_cast<long long>(trajectory.points.back().time_from_start * 1000)
+    );
+}
+
+void RobotHardware::cleanup_completed_trajectory_tasks() {
+    std::unique_lock<std::shared_mutex> lock(trajectory_tasks_mutex_);
+
+    std::vector<std::string> to_remove;
+    for (auto& [exec_id, task] : trajectory_execution_tasks_) {
+        auto state = task->state.load();
+        if (state == TrajectoryExecutionState::COMPLETED ||
+            state == TrajectoryExecutionState::CANCELLED ||
+            state == TrajectoryExecutionState::ERROR) {
+            if (task->executor_thread.joinable()) {
+                task->executor_thread.join();
+            }
+            to_remove.push_back(exec_id);
+        }
+    }
+
+    for (const auto& exec_id : to_remove) {
+        trajectory_execution_tasks_.erase(exec_id);
+    }
+}
+
 // ========== 工厂函数实现 ==========
 namespace hardware_driver {
     std::shared_ptr<motor_driver::MotorDriverInterface> createCanFdMotorDriver(
