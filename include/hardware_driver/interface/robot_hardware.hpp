@@ -17,6 +17,7 @@
 #include <array>
 #include <shared_mutex>
 #include "hardware_driver/driver/motor_driver_interface.hpp"
+#include "hardware_driver/driver/gripper_driver_interface.hpp"
 #include "hardware_driver/event/event_bus.hpp"
 
 // 前向声明，避免在头文件中包含实现类
@@ -26,6 +27,9 @@ namespace hardware_driver {
     }
     namespace motor_driver {
         class MotorDriverImpl;
+    }
+    namespace gripper_driver {
+        class GripperDriverImpl;
     }
     namespace bus {
         class CanFdBus;
@@ -39,12 +43,16 @@ namespace hardware_driver {
     std::shared_ptr<motor_driver::MotorDriverInterface> createCanFdMotorDriver(
         const std::vector<std::string>& interfaces);
 
+    // 创建CANFD夹爪驱动实例
+    std::shared_ptr<gripper_driver::GripperDriverInterface> createCanFdGripperDriver(
+        const std::vector<std::string>& interfaces);
+
     // 创建USB2CANFD电机驱动实例
     // std::shared_ptr<motor_driver::MotorDriverInterface> createUsb2CanfdMotorDriver(
     //     const std::vector<std::string>& device_sns);
 }
 
-// ========== 轨迹数据结构定义 ==========
+// 轨迹数据结构定义
 // 简化的轨迹点结构（不依赖ROS2消息）
 struct TrajectoryPoint {
     double time_from_start;
@@ -124,7 +132,7 @@ public:
     void disable_motor(const std::string& interface, const uint32_t motor_id, uint8_t mode);
     void enable_motor(const std::string& interface, const uint32_t motor_id, uint8_t mode);
     
-    // ========== 实时批量控制接口（支持最多 6 个电机） ==========
+    // 实时批量控制接口（支持最多 6 个电机）
     void disable_motors(const std::string& interface, const std::vector<uint32_t>& motor_ids, uint8_t mode);
     void enable_motors(const std::string& interface, const std::vector<uint32_t>& motor_ids, uint8_t mode);
     // 使用 std::array<double, 6> 避免动态分配开销
@@ -150,16 +158,16 @@ public:
                                   const std::array<double, 6>& kps = {},
                                   const std::array<double, 6>& kds = {});
     
-    // ========== 参数读写接口 ==========
+    // 参数读写接口 
     void motor_parameter_read(const std::string& interface, const uint32_t motor_id, uint16_t address);
     void motor_parameter_write(const std::string& interface, const uint32_t motor_id, uint16_t address, int32_t value);
     void motor_parameter_write(const std::string& interface, const uint32_t motor_id, uint16_t address, float value);
     
-    // ========== 函数操作接口 ==========
+    //  函数操作接口 
     void motor_function_operation(const std::string& interface, const uint32_t motor_id, uint8_t operation);
     void arm_zero_position_set(const std::string& interface, const std::vector<uint32_t> motor_ids);
     
-    // ========== IAP固件更新接口 ==========
+    // IAP固件更新接口 
     void start_update(const std::string& interface, const uint8_t motor_id, const std::string& firmware_file);
 
     // ========== 轨迹执行接口 ==========
@@ -253,10 +261,57 @@ public:
     size_t get_active_trajectory_count() const;
 
     // ========== 状态监控控制方法 ==========
+
+    //  轨迹执行接口 
+    bool execute_trajectory(const std::string& interface, const Trajectory& trajectory);
+
+    //  夹爪控制接口 
+    /**
+     * @brief 控制夹爪
+     * @param interface 总线接口名称 (如"can0")
+     * @param gripper_type 夹爪类型 (0=OmniPicker, 1=PGC_Gripper, 2=Raw_Frame)
+     * @param position 位置 (0-100%)
+     * @param velocity 速度 (0-100%)
+     * @param effort 力 (0-100%)
+     */
+    void control_gripper(const std::string& interface,
+                        uint8_t gripper_type,
+                        uint8_t position,
+                        uint8_t velocity,
+                        uint8_t effort);
+
+    
+    void open_gripper(const std::string& interface,
+                     uint8_t gripper_type,
+                     uint8_t velocity = 50,
+                     uint8_t effort = 50);
+
+    
+    void close_gripper(const std::string& interface,
+                      uint8_t gripper_type,
+                      uint8_t velocity = 50,
+                      uint8_t effort = 50);
+
+    /**
+     * @brief 发送原始数据到夹爪（Raw_Frame模式）
+     * @param interface 总线接口名称
+     * @param raw_data 原始数据指针
+     * @param raw_data_len 原始数据长度
+     */
+    void send_gripper_raw_data(const std::string& interface,
+                              const uint8_t* raw_data,
+                              size_t raw_data_len);
+
+    // 状态监控控制方法
+
     void pause_status_monitoring();
     void resume_status_monitoring();
+
+    // 夹爪驱动设置方法
+    void set_gripper_driver(std::shared_ptr<hardware_driver::gripper_driver::GripperDriverInterface> gripper_driver);
 private:
     std::shared_ptr<hardware_driver::motor_driver::MotorDriverInterface> motor_driver_;
+    std::shared_ptr<hardware_driver::gripper_driver::GripperDriverInterface> gripper_driver_;
     std::map<std::string, std::vector<uint32_t>> interface_motor_config_;  // 每个接口对应的电机ID列表
 
     // 状态回调函数（传递给motor_driver_impl）
