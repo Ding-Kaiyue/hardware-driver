@@ -668,20 +668,20 @@ std::string RobotHardware::execute_trajectory_async(
     }
 
     // 检查该接口是否已有执行中的轨迹（包括IDLE、RUNNING、PAUSED状态）
-    {
-        std::shared_lock<std::shared_mutex> lock(trajectory_tasks_mutex_);
-        for (const auto& [exec_id, task] : trajectory_execution_tasks_) {
-            if (task->interface == interface) {
-                auto state = task->state.load();
-                // 任何非终止状态都表示轨迹占用了接口
-                if (state != TrajectoryExecutionState::COMPLETED &&
-                    state != TrajectoryExecutionState::CANCELLED &&
-                    state != TrajectoryExecutionState::ERROR) {
-                    return "";
-                }
-            }
-        }
-    }
+    // {
+    //     std::shared_lock<std::shared_mutex> lock(trajectory_tasks_mutex_);
+    //     for (const auto& [exec_id, task] : trajectory_execution_tasks_) {
+    //         if (task->interface == interface) {
+    //             auto state = task->state.load();
+    //             // 任何非终止状态都表示轨迹占用了接口
+    //             if (state != TrajectoryExecutionState::COMPLETED &&
+    //                 state != TrajectoryExecutionState::CANCELLED &&
+    //                 state != TrajectoryExecutionState::ERROR) {
+    //                 return "";
+    //             }
+    //         }
+    //     }
+    // }
 
     // 生成执行ID并创建执行任务
     std::string execution_id = generate_execution_id();
@@ -689,7 +689,7 @@ std::string RobotHardware::execute_trajectory_async(
     task->execution_id = execution_id;
     task->interface = interface;
     task->trajectory = trajectory;
-    task->state = TrajectoryExecutionState::IDLE;
+    task->state = TrajectoryExecutionState::RUNNING;  // 立即设为RUNNING，防止竞态
     task->show_progress = show_progress;
 
     // 添加到任务队列
@@ -858,12 +858,25 @@ bool RobotHardware::wait_for_completion(const std::string& execution_id, int tim
                state == TrajectoryExecutionState::ERROR;
     };
 
+    bool result;
     if (timeout_ms == 0) {
         task->state_cv.wait(state_lock, pred);
-        return true;
+        result = true;
     } else {
-        return task->state_cv.wait_for(state_lock, std::chrono::milliseconds(timeout_ms), pred);
+        result = task->state_cv.wait_for(state_lock, std::chrono::milliseconds(timeout_ms), pred);
     }
+
+    // 任务完成后，清理该任务（防止资源泄漏）
+    if (result) {
+        state_lock.unlock();
+        std::unique_lock<std::shared_mutex> tasks_lock(trajectory_tasks_mutex_);
+        if (task->executor_thread.joinable()) {
+            task->executor_thread.join();
+        }
+        trajectory_execution_tasks_.erase(execution_id);
+    }
+
+    return result;
 }
 
 void RobotHardware::pause_all_trajectories() {
