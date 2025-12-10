@@ -18,6 +18,7 @@
 #include <shared_mutex>
 #include "hardware_driver/driver/motor_driver_interface.hpp"
 #include "hardware_driver/driver/gripper_driver_interface.hpp"
+#include "hardware_driver/driver/button_driver_interface.hpp"
 #include "hardware_driver/event/event_bus.hpp"
 
 // 前向声明，避免在头文件中包含实现类
@@ -31,7 +32,11 @@ namespace hardware_driver {
     namespace gripper_driver {
         class GripperDriverImpl;
     }
+    namespace button_driver {
+        class ButtonDriverImpl;
+    }
     namespace bus {
+        class BusInterface;  // 前向声明基类
         class CanFdBus;
         // class Usb2CanFdBus;
     }
@@ -45,6 +50,14 @@ namespace hardware_driver {
 
     // 创建CANFD夹爪驱动实例
     std::shared_ptr<gripper_driver::GripperDriverInterface> createCanFdGripperDriver(
+        const std::vector<std::string>& interfaces);
+
+    // 创建CANFD按键驱动实例
+    std::shared_ptr<button_driver::ButtonDriverInterface> createCanFdButtonDriver(
+        std::shared_ptr<bus::BusInterface> bus);
+
+    // 创建CANFD总线实例
+    std::shared_ptr<bus::BusInterface> createCanFdBus(
         const std::vector<std::string>& interfaces);
 
     // 创建USB2CANFD电机驱动实例
@@ -262,8 +275,8 @@ public:
 
     // ========== 状态监控控制方法 ==========
 
-    //  轨迹执行接口 
-    bool execute_trajectory(const std::string& interface, const Trajectory& trajectory);
+    // //  轨迹执行接口 
+    // bool execute_trajectory(const std::string& interface, const Trajectory& trajectory);
 
     //  夹爪控制接口 
     /**
@@ -309,9 +322,36 @@ public:
 
     // 夹爪驱动设置方法
     void set_gripper_driver(std::shared_ptr<hardware_driver::gripper_driver::GripperDriverInterface> gripper_driver);
+
+    // ========== 按键驱动接口 ==========
+    /**
+     * @brief 设置按键驱动
+     * @param button_driver 按键驱动实例
+     */
+    void set_button_driver(std::shared_ptr<hardware_driver::button_driver::ButtonDriverInterface> button_driver);
+
+    /**
+     * @brief 发送复现完成信号 (LED熄灭)
+     * @param interface CAN接口名称
+     */
+    void send_button_replay_complete(const std::string& interface);
+
+    /**
+     * @brief 添加按键事件观察者
+     * @param observer 观察者对象
+     */
+    void add_button_observer(std::shared_ptr<hardware_driver::button_driver::ButtonEventObserver> observer);
+
+    /**
+     * @brief 移除按键事件观察者
+     * @param observer 观察者对象
+     */
+    void remove_button_observer(std::shared_ptr<hardware_driver::button_driver::ButtonEventObserver> observer);
+
 private:
     std::shared_ptr<hardware_driver::motor_driver::MotorDriverInterface> motor_driver_;
     std::shared_ptr<hardware_driver::gripper_driver::GripperDriverInterface> gripper_driver_;
+    std::shared_ptr<hardware_driver::button_driver::ButtonDriverInterface> button_driver_;  // 按键驱动
     std::map<std::string, std::vector<uint32_t>> interface_motor_config_;  // 每个接口对应的电机ID列表
 
     // 状态回调函数（传递给motor_driver_impl）

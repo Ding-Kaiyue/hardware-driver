@@ -2,6 +2,7 @@
 #include "hardware_driver/event/motor_events.hpp"
 #include "driver/motor_driver_impl.hpp"
 #include "driver/gripper_driver_impl.hpp"
+#include "driver/button_driver_impl.hpp"
 #include "bus/canfd_bus_impl.hpp"
 // #include "bus/usb2canfd_bus_impl.hpp"
 #include <chrono>
@@ -1226,4 +1227,71 @@ namespace hardware_driver {
     //     // 创建电机驱动实例
     //     return std::make_shared<hardware_driver::motor_driver::MotorDriverImpl>(bus);
     // }
+
+    std::shared_ptr<button_driver::ButtonDriverInterface> createCanFdButtonDriver(
+        std::shared_ptr<bus::BusInterface> bus) {
+        // 创建按键驱动实例
+        return std::make_shared<hardware_driver::button_driver::ButtonDriverImpl>(bus);
+    }
+
+    std::shared_ptr<bus::BusInterface> createCanFdBus(
+        const std::vector<std::string>& interfaces) {
+        return std::make_shared<hardware_driver::bus::CanFdBus>(interfaces);
+    }
+}
+
+// ========== 按键驱动接口实现 ==========
+void RobotHardware::set_button_driver(
+    std::shared_ptr<hardware_driver::button_driver::ButtonDriverInterface> button_driver) {
+    button_driver_ = std::move(button_driver);
+
+    // 设置按键数据包转发回调
+    auto motor_driver_impl = std::dynamic_pointer_cast<hardware_driver::motor_driver::MotorDriverImpl>(motor_driver_);
+    auto button_driver_impl = std::dynamic_pointer_cast<hardware_driver::button_driver::ButtonDriverImpl>(button_driver_);
+
+    if (motor_driver_impl && button_driver_impl) {
+        motor_driver_impl->register_button_packet_callback(
+            [button_driver_impl](const std::string& interface, uint32_t can_id,
+                                 const uint8_t* data, size_t len) {
+                button_driver_impl->handle_can_packet(interface, can_id, data, len);
+            }
+        );
+        std::cout << "[ButtonDriver] 按键数据包转发回调已设置" << std::endl;
+    }
+}
+
+void RobotHardware::send_button_replay_complete(const std::string& interface) {
+    // 直接通过 motor_driver 发送复现完成信号 (FXJS)
+    // 因为 button_driver 可能没有独立的总线
+    if (motor_driver_) {
+        auto motor_driver_impl = std::dynamic_pointer_cast<hardware_driver::motor_driver::MotorDriverImpl>(motor_driver_);
+        if (motor_driver_impl) {
+            constexpr uint32_t BUTTON_TX_CAN_ID = 0x7F;
+            constexpr uint8_t REPLAY_COMPLETE_CODE[4] = {0x46, 0x58, 0x4A, 0x53};  // "FXJS"
+
+            hardware_driver::bus::GenericBusPacket packet;
+            packet.interface = interface;
+            packet.id = BUTTON_TX_CAN_ID;
+            packet.len = 4;
+            std::fill(packet.data.begin(), packet.data.end(), 0);
+            std::copy(REPLAY_COMPLETE_CODE, REPLAY_COMPLETE_CODE + 4, packet.data.begin());
+
+            motor_driver_impl->send_control_command(packet);
+            std::cout << "[ButtonDriver] 发送复现完成信号 (FXJS) -> " << interface << std::endl;
+        }
+    }
+}
+
+void RobotHardware::add_button_observer(
+    std::shared_ptr<hardware_driver::button_driver::ButtonEventObserver> observer) {
+    if (button_driver_) {
+        button_driver_->add_observer(observer);
+    }
+}
+
+void RobotHardware::remove_button_observer(
+    std::shared_ptr<hardware_driver::button_driver::ButtonEventObserver> observer) {
+    if (button_driver_) {
+        button_driver_->remove_observer(observer);
+    }
 }

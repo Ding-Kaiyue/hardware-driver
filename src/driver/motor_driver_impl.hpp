@@ -90,9 +90,15 @@ public:
     static constexpr size_t MAX_QUEUE_SIZE = 128;
     
     // 回调函数类型定义
-    using FeedbackCallback = std::function<void(const std::string& interface, 
-                                               uint32_t motor_id, 
+    using FeedbackCallback = std::function<void(const std::string& interface,
+                                               uint32_t motor_id,
                                                const Motor_Status& status)>;
+
+    // 按键数据包回调类型 (用于转发按键CAN数据包)
+    using ButtonPacketCallback = std::function<void(const std::string& interface,
+                                                    uint32_t can_id,
+                                                    const uint8_t* data,
+                                                    size_t len)>;
 
     explicit MotorDriverImpl(std::shared_ptr<bus::BusInterface> bus);
     
@@ -148,6 +154,7 @@ public:
     
     // 新增公共接口
     void register_feedback_callback(FeedbackCallback callback);
+    void register_button_packet_callback(ButtonPacketCallback callback);  // 注册按键数据包回调
     void send_control_command(const bus::GenericBusPacket& packet);
     void send_control_command(const bus::GenericBusPacket& packet, CommandPriority priority);
     bool send_control_command_timeout(const bus::GenericBusPacket& packet, std::chrono::milliseconds timeout = std::chrono::milliseconds(10));
@@ -174,6 +181,7 @@ private:
     std::unordered_map<Motor_Key, Motor_Status> status_map_;
     mutable std::shared_mutex status_map_mutex_;  // 读写锁，支持多读者单写者
     FeedbackCallback feedback_callback_;
+    ButtonPacketCallback button_packet_callback_;  // 按键数据包回调
 
     // 追踪每个电机的当前模式
     std::unordered_map<Motor_Key, uint8_t> motor_modes_;  // 存储每个电机的当前模式
