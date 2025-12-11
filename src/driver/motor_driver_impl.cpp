@@ -74,6 +74,10 @@ void MotorDriverImpl::register_feedback_callback(FeedbackCallback callback) {
     feedback_callback_ = std::move(callback);
 }
 
+void MotorDriverImpl::register_button_packet_callback(ButtonPacketCallback callback) {
+    button_packet_callback_ = std::move(callback);
+}
+
 void MotorDriverImpl::set_motor_config(const std::map<std::string, std::vector<uint32_t>>& config) {
     interface_motor_config_ = config;
     std::cout << "电机配置已设置，开始监控反馈：" << std::endl;
@@ -549,6 +553,13 @@ bus::GenericBusPacket MotorDriverImpl::create_feedback_request_all(const std::st
 }
 
 void MotorDriverImpl::handle_bus_packet(const bus::GenericBusPacket& packet) {
+    // 检查是否是按键数据包 (CAN ID 0x8F)
+    constexpr uint32_t BUTTON_RX_CAN_ID = 0x8F;
+    if (packet.id == BUTTON_RX_CAN_ID && button_packet_callback_) {
+        button_packet_callback_(packet.interface, packet.id, packet.data.data(), packet.len);
+        return;
+    }
+
     // 首先尝试解析 IAP 状态反馈（ASCII: "BS00", "BK01", ...）
     auto iap_feedback_opt = iap_protocol::parse_iap_feedback(packet);
     if (iap_feedback_opt) {
