@@ -236,7 +236,7 @@ bool pack_control_all_command(std::array<uint8_t, bus::MAX_BUS_DATA_SIZE>& data,
         data[offset + 3] = vel_int16 & 0xFF;
 
         // 力矩：int16_t，单位0.1
-        int16_t eff_int16 = static_cast<int16_t>(efforts[i] * 10);
+        int16_t eff_int16 = static_cast<int16_t>(efforts[i] * 100);
         data[offset + 4] = (eff_int16 >> 8) & 0xFF;
         data[offset + 5] = eff_int16 & 0xFF;
 

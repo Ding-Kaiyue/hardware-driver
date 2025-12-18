@@ -1029,6 +1029,7 @@ void RobotHardware::trajectory_execution_worker(std::shared_ptr<TrajectoryExecut
                 positions[i] = position;
             }
 
+            // TODO: 补充每个轨迹点的重力矩并下发
             motor_driver_->send_mit_cmd_all(task->interface, positions, velocities, efforts);
 
             // 更新进度
