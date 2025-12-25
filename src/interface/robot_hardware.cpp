@@ -1026,10 +1026,12 @@ void RobotHardware::trajectory_execution_worker(std::shared_ptr<TrajectoryExecut
 
             for (size_t i = 0; i < motor_ids.size(); ++i) {
                 float position = (i < point.positions.size()) ? static_cast<float>(point.positions[i]) : 0.0f;
+                float effort = (i < point.efforts.size()) ? static_cast<float>(point.efforts[i]) : 0.0f;
                 positions[i] = position;
+                efforts[i] = effort;
             }
 
-            // TODO: 补充每个轨迹点的重力矩并下发
+            // 使用轨迹点中预计算的重力矩
             motor_driver_->send_mit_cmd_all(task->interface, positions, velocities, efforts);
 
             // 更新进度

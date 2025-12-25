@@ -72,6 +72,7 @@ struct TrajectoryPoint {
     std::vector<double> positions;
     std::vector<double> velocities;
     std::vector<double> accelerations;
+    std::vector<double> efforts;  // 重力补偿力矩 (可选，用于MIT模式控制)
 };
 
 // 简化的轨迹结构（不依赖ROS2消息）
