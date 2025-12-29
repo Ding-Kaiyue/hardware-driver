@@ -146,21 +146,27 @@ public:
     // 批量控制接口（广播给所有电机，支持最多 6 个）
     // kp 和 kd 默认值：0.05 和 0.005
     virtual void send_position_cmd_all(const std::string interface, const std::array<float, 6>& positions,
-                                      const std::array<float, 6>& kps = {0.05f, 0.05f, 0.05f, 0.05f, 0.05f, 0.05f},
-                                      const std::array<float, 6>& kds = {0.005f, 0.005f, 0.005f, 0.005f, 0.005f, 0.005f}) = 0;
+                                      const std::array<float, 6>& kps = position_kps,
+                                      const std::array<float, 6>& kds = position_kds) = 0;
     virtual void send_velocity_cmd_all(const std::string interface, const std::array<float, 6>& velocities,
-                                      const std::array<float, 6>& kps = {0.05f, 0.05f, 0.05f, 0.05f, 0.05f, 0.05f},
-                                      const std::array<float, 6>& kds = {0.005f, 0.005f, 0.005f, 0.005f, 0.005f, 0.005f}) = 0;
+                                      const std::array<float, 6>& kps = velocity_kps,
+                                      const std::array<float, 6>& kds = velocity_kds) = 0;
     virtual void send_effort_cmd_all(const std::string interface, const std::array<float, 6>& efforts,
-                                    const std::array<float, 6>& kps = {0.05f, 0.05f, 0.05f, 0.05f, 0.05f, 0.05f},
-                                    const std::array<float, 6>& kds = {0.005f, 0.005f, 0.005f, 0.005f, 0.005f, 0.005f}) = 0;
+                                    const std::array<float, 6>& kps = position_kps,
+                                    const std::array<float, 6>& kds = position_kds) = 0;
     virtual void send_mit_cmd_all(const std::string interface, const std::array<float, 6>& positions,
                                  const std::array<float, 6>& velocities, const std::array<float, 6>& efforts,
-                                 const std::array<float, 6>& kps = {0.05f, 0.05f, 0.05f, 0.05f, 0.05f, 0.05f},
-                                 const std::array<float, 6>& kds = {0.005f, 0.005f, 0.005f, 0.005f, 0.005f, 0.005f}) = 0;
+                                 const std::array<float, 6>& kps = position_kps,
+                                 const std::array<float, 6>& kds = position_kds) = 0;
 
     // IAP (In-Application Programming) firmware update
     virtual void start_update(const std::string& interface, uint32_t motor_id, const std::string& firmware_file) = 0;
+
+private:
+    static constexpr std::array<float, 6> position_kps = {0.05f, 0.05f, 0.05f, 0.05f, 0.05f, 0.05f};
+    static constexpr std::array<float, 6> position_kds = {0.005f, 0.005f, 0.005f, 0.005f, 0.005f, 0.005f};
+    static constexpr std::array<float, 6> velocity_kps = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    static constexpr std::array<float, 6> velocity_kds = {0.01f, 0.01f, 0.01f, 0.01f, 0.01f, 0.01f};
 };
 
 

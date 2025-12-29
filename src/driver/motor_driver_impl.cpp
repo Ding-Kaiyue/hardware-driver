@@ -137,30 +137,35 @@ void MotorDriverImpl::send_control_command(const bus::GenericBusPacket& packet) 
 
 void MotorDriverImpl::send_control_command(const bus::GenericBusPacket& packet, CommandPriority priority) {
     // 重复命令过滤：避免队列被相同命令填满
-    if (is_duplicate_command(packet)) {
-        // 跳过重复命令，但不报错
+    bool is_duplicate = is_duplicate_command(packet);
+
+    if (is_duplicate) {
+        // 即使是重复命令也要更新控制时间戳，表示控制活跃
+        // 这确保在连续发送相同命令时（如重力补偿）不会因为超时而降低反馈频率
+        last_control_time_ = std::chrono::steady_clock::now();
+        high_freq_mode_.store(true, std::memory_order_relaxed);
         return;
     }
-    
+
     // 优先级队列：高优先级命令会优先处理
     {
         std::unique_lock<std::mutex> lock(control_mutex_);
-        
+
         // 队列满时警告，但依然等待（确保不丢包）
         if (control_priority_queue_.size() >= MAX_QUEUE_SIZE * 0.8) {  // 80%时开始警告
-            std::cerr << "Warning: Control queue is " << (control_priority_queue_.size() * 100 / MAX_QUEUE_SIZE) 
+            std::cerr << "Warning: Control queue is " << (control_priority_queue_.size() * 100 / MAX_QUEUE_SIZE)
                       << "% full (" << control_priority_queue_.size() << "/" << MAX_QUEUE_SIZE << ")" << std::endl;
         }
-        
+
         // 阻塞等待，绝不丢包
-        control_cv_.wait(lock, [this] { 
-            return control_priority_queue_.size() < MAX_QUEUE_SIZE; 
+        control_cv_.wait(lock, [this] {
+            return control_priority_queue_.size() < MAX_QUEUE_SIZE;
         });
-        
+
         // 创建优先级命令并加入队列
         control_priority_queue_.emplace(packet, priority);
     }
-    
+
     // 唤醒控制线程
     control_cv_.notify_one();
 }
