@@ -6,6 +6,8 @@
 #include <map>
 #include <any>
 #include <memory>
+#include <array>
+
 
 namespace hardware_driver {
 namespace motor_driver {
