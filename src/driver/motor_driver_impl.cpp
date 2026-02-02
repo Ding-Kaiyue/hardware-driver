@@ -23,6 +23,8 @@ MotorDriverImpl::MotorDriverImpl(std::shared_ptr<bus::BusInterface> bus)
     }
     // 初始化控制时间
     last_control_time_ = std::chrono::steady_clock::now();
+    // 初始化时使用高频反馈（idle状态）
+    high_freq_mode_.store(true, std::memory_order_relaxed);
 
     // 注册异步接收回调 - 只负责入队，不阻塞接收线程
     bus_->async_receive([this](const bus::GenericBusPacket& packet) {
@@ -143,7 +145,7 @@ void MotorDriverImpl::send_control_command(const bus::GenericBusPacket& packet, 
         // 即使是重复命令也要更新控制时间戳，表示控制活跃
         // 这确保在连续发送相同命令时（如重力补偿）不会因为超时而降低反馈频率
         last_control_time_ = std::chrono::steady_clock::now();
-        high_freq_mode_.store(true, std::memory_order_relaxed);
+        high_freq_mode_.store(false, std::memory_order_relaxed);  // 控制期间使用低频
         return;
     }
 
@@ -470,11 +472,11 @@ void MotorDriverImpl::control_worker() {
                 
                 // 发送控制命令
                 bus_->send(packet);
-                
-                // 更新控制时间，切换到高频模式
+
+                // 更新控制时间，切换到低频模式（避免USB带宽饱和）
                 last_control_time_ = std::chrono::steady_clock::now();
-                high_freq_mode_.store(true, std::memory_order_relaxed);
-                
+                high_freq_mode_.store(false, std::memory_order_relaxed);
+
                 // 计算下次发送时间，使用配置的控制间隔
                 next_send_time += timing_config_.control_interval;
                 
@@ -504,14 +506,15 @@ void MotorDriverImpl::feedback_request_worker() {
         auto now = std::chrono::steady_clock::now();
         
         // 检查频率模式切换
-        if (high_freq_mode_.load(std::memory_order_relaxed) && 
+        // 当控制结束（超时）后，切换到高频模式以获取实时反馈
+        if (!high_freq_mode_.load(std::memory_order_relaxed) &&
            (now - last_control_time_) > mode_timeout) {
-            high_freq_mode_.store(false, std::memory_order_relaxed);
+            high_freq_mode_.store(true, std::memory_order_relaxed);
         }
-        
+
         // 定时发送反馈请求
         if (now >= next_request_time) {
-            auto interval = high_freq_mode_.load(std::memory_order_relaxed) ? 
+            auto interval = high_freq_mode_.load(std::memory_order_relaxed) ?
                            high_freq_interval : low_freq_interval;
             
             try {

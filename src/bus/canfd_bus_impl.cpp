@@ -1,4 +1,5 @@
 #include "bus/canfd_bus_impl.hpp"
+#include <mutex>
 
 namespace hardware_driver {
 namespace bus {
@@ -132,6 +133,8 @@ CanFdBus::SocketPtr CanFdBus::bind_can_socket(const std::string& interface, bool
 }
 
 bool CanFdBus::send(const bus::GenericBusPacket& packet) {
+    std::lock_guard<std::mutex> lock(send_mutex_);  // 保护多接口的USB设备访问
+
     auto it = interface_sockets_.find(packet.interface);
     if (it == interface_sockets_.end()) {
         throw std::runtime_error("CAN interface " + packet.interface + " not found");
@@ -142,7 +145,7 @@ bool CanFdBus::send(const bus::GenericBusPacket& packet) {
     const bool use_canfd = canfd_flags_.count(packet.interface) ? canfd_flags_.at(packet.interface) : true;
     const bool use_extended = extended_frame_flags_.count(packet.interface) ? extended_frame_flags_.at(packet.interface) : true;
     const uint32_t id = packet.id;
-    
+
     if (use_canfd) {
         if (packet.len > CANFD_MAX_DLEN) {
             throw std::runtime_error("CAN FD message too large (" + std::to_string(packet.len) + " > 64 bytes)");

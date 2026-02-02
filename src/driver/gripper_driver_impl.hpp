@@ -75,7 +75,6 @@ private:
     std::shared_ptr<bus::BusInterface> bus_;                        ///< 总线接口
     std::vector<std::shared_ptr<GripperStatusObserver>> observers_; ///< 观察者列表
     std::mutex observers_mutex_;                                    ///< 观察者列表互斥锁
-    std::mutex send_mutex_;                                         ///< 发送互斥锁
 
     // 状态缓存 (interface -> gripper_id -> status)
     std::map<std::string, std::map<uint32_t, GripperStatus>> status_cache_;

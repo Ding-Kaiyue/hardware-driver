@@ -174,7 +174,7 @@ void GripperDriverImpl::notify_observers(const std::string& interface,
 }
 
 bool GripperDriverImpl::send_packet(const bus::GenericBusPacket& packet) {
-    std::lock_guard<std::mutex> lock(send_mutex_);
+    // CanFdBus::send() 已经有互斥锁保护，无需再在这里加锁
     return bus_->send(packet);
 }
 

@@ -7,6 +7,7 @@
 #include <memory>
 #include <thread>
 #include <atomic>
+#include <mutex>
 #include <functional>
 #include <linux/can.h>
 #include <linux/can/raw.h>
@@ -71,6 +72,9 @@ private:
     std::function<void(const GenericBusPacket&)> receive_callback_;
     std::vector<std::thread> receive_threads_;
     std::atomic<bool> running_{false};
+
+    // 互斥锁用于保护send操作，防止USB设备被过载
+    mutable std::mutex send_mutex_;
 
 };
 
