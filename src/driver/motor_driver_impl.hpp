@@ -78,7 +78,7 @@ struct PriorityComparator {
 // 可配置的时序参数结构体
 struct TimingConfig {
     std::chrono::microseconds control_interval{200};     // 控制命令间隔
-    std::chrono::microseconds high_freq_feedback{2000};   // 高频反馈间隔 (500Hz)
+    std::chrono::microseconds high_freq_feedback{4000};   // 高频反馈间隔 (250Hz)
     std::chrono::milliseconds low_freq_feedback{20};     // 低频反馈间隔 (50Hz)
     std::chrono::milliseconds mode_timeout{100};         // 高频模式超时
     int control_cpu_core{4};                           // 控制线程CPU绑定 (-1表示不绑定)(2~5 P核心可以获得最佳实时性能)
