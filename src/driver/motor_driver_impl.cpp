@@ -108,6 +108,28 @@ void MotorDriverImpl::resume_feedback_request() {
     std::cout << "[Feedback] Resumed feedback request" << std::endl;
 }
 
+void MotorDriverImpl::force_high_freq_feedback() {
+    force_high_freq_.store(true, std::memory_order_release);
+    force_low_freq_.store(false, std::memory_order_release);
+    std::cout << "[Feedback] Forced high frequency feedback (4ms)" << std::endl;
+}
+
+void MotorDriverImpl::force_low_freq_feedback() {
+    force_low_freq_.store(true, std::memory_order_release);
+    force_high_freq_.store(false, std::memory_order_release);
+    std::cout << "[Feedback] Forced low frequency feedback (20ms)" << std::endl;
+}
+
+void MotorDriverImpl::cancel_force_high_freq() {
+    force_high_freq_.store(false, std::memory_order_release);
+    std::cout << "[Feedback] Cancelled forced high frequency - back to auto" << std::endl;
+}
+
+void MotorDriverImpl::cancel_force_low_freq() {
+    force_low_freq_.store(false, std::memory_order_release);
+    std::cout << "[Feedback] Cancelled forced low frequency - back to auto" << std::endl;
+}
+
 bool MotorDriverImpl::send_control_command_timeout(const bus::GenericBusPacket& packet, std::chrono::milliseconds timeout) {
     // 有界队列：带超时的安全版本，避免程序永久阻塞
     {
@@ -138,16 +160,13 @@ void MotorDriverImpl::send_control_command(const bus::GenericBusPacket& packet) 
 }
 
 void MotorDriverImpl::send_control_command(const bus::GenericBusPacket& packet, CommandPriority priority) {
-    // 重复命令过滤：避免队列被相同命令填满
-    bool is_duplicate = is_duplicate_command(packet);
+    // ✅ 重复命令也要入队处理（用于高频示教反馈）
+    // 重复检测仅用于日志，不阻止入队
+    // bool is_duplicate = is_duplicate_command(packet);
 
-    if (is_duplicate) {
-        // 即使是重复命令也要更新控制时间戳，表示控制活跃
-        // 这确保在连续发送相同命令时（如重力补偿）不会因为超时而降低反馈频率
-        last_control_time_ = std::chrono::steady_clock::now();
-        high_freq_mode_.store(false, std::memory_order_relaxed);  // 控制期间使用低频
-        return;
-    }
+    // 更新控制时间戳，无论是否重复
+    last_control_time_ = std::chrono::steady_clock::now();
+    high_freq_mode_.store(false, std::memory_order_relaxed); 
 
     // 优先级队列：高优先级命令会优先处理
     {
@@ -164,7 +183,7 @@ void MotorDriverImpl::send_control_command(const bus::GenericBusPacket& packet, 
             return control_priority_queue_.size() < MAX_QUEUE_SIZE;
         });
 
-        // 创建优先级命令并加入队列
+        // 创建优先级命令并加入队列（包括重复命令）
         control_priority_queue_.emplace(packet, priority);
     }
 
@@ -512,10 +531,17 @@ void MotorDriverImpl::feedback_request_worker() {
             high_freq_mode_.store(true, std::memory_order_relaxed);
         }
 
+        // 决定使用的频率（强制标志优先）
+        bool use_high_freq = high_freq_mode_.load(std::memory_order_relaxed);
+        if (force_high_freq_.load(std::memory_order_relaxed)) {
+            use_high_freq = true;
+        } else if (force_low_freq_.load(std::memory_order_relaxed)) {
+            use_high_freq = false;
+        }
+
         // 定时发送反馈请求
         if (now >= next_request_time) {
-            auto interval = high_freq_mode_.load(std::memory_order_relaxed) ?
-                           high_freq_interval : low_freq_interval;
+            auto interval = use_high_freq ? high_freq_interval : low_freq_interval;
             
             try {
                 for (const auto& [interface, motor_ids] : interface_motor_config_) {

@@ -321,6 +321,12 @@ public:
     void pause_status_monitoring();
     void resume_status_monitoring();
 
+    // 反馈频率模式控制（用于轨迹录制等需要高频反馈的场景）
+    void force_high_freq_feedback();      // 强制高频反馈
+    void force_low_freq_feedback();       // 强制低频反馈
+    void cancel_force_high_freq();        // 取消强制高频，恢复自动切换
+    void cancel_force_low_freq();         // 取消强制低频，恢复自动切换
+
     // 夹爪驱动设置方法
     void set_gripper_driver(std::shared_ptr<hardware_driver::gripper_driver::GripperDriverInterface> gripper_driver);
 

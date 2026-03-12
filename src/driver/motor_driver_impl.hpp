@@ -169,6 +169,12 @@ public:
     void pause_feedback_request();
     void resume_feedback_request();
 
+    // 反馈频率模式控制（用于轨迹录制等需要高频反馈的场景）
+    void force_high_freq_feedback();      // 强制高频反馈
+    void force_low_freq_feedback();       // 强制低频反馈
+    void cancel_force_high_freq();        // 取消强制高频，恢复自动切换
+    void cancel_force_low_freq();         // 取消强制低频，恢复自动切换
+
     // 观察者模式接口
     void add_observer(std::shared_ptr<MotorStatusObserver> observer);
     void add_iap_observer(std::shared_ptr<IAPStatusObserver> observer);
@@ -215,6 +221,8 @@ private:
 
     // 频率控制
     std::atomic<bool> high_freq_mode_{false};
+    std::atomic<bool> force_high_freq_{false};  // 强制高频标志
+    std::atomic<bool> force_low_freq_{false};   // 强制低频标志
     std::chrono::steady_clock::time_point last_control_time_;
     std::map<std::string, std::vector<uint32_t>> interface_motor_config_;
     std::map<std::string, std::vector<uint32_t>> saved_motor_config_;  // 保存暂停前的配置

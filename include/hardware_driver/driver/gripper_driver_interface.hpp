@@ -25,7 +25,7 @@ enum class GripperType : uint8_t {
 };
 
 //夹爪状态数据结构
-struct GripperStatus {
+typedef struct {
     uint8_t position;       ///< 位置 (0-255)
     uint8_t velocity;       ///< 速度 (0-255)
     uint8_t force;          ///< 力 (0-255)
@@ -33,7 +33,7 @@ struct GripperStatus {
     uint8_t action_status;  ///< 动作状态码
     bool has_object;        ///< 是否夹持物体
     bool is_moving;         ///< 是否正在移动
-};
+} GripperStatus;
 
 //实现此接口以接收夹爪状态更新回调
 class GripperStatusObserver {

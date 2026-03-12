@@ -626,7 +626,7 @@ void RobotHardware::pause_status_monitoring() {
 void RobotHardware::resume_status_monitoring() {
     // 转换为MotorDriverImpl以访问内部方法
     auto motor_driver_impl = std::dynamic_pointer_cast<hardware_driver::motor_driver::MotorDriverImpl>(motor_driver_);
-    
+
     if (motor_driver_impl && monitoring_paused_) {
         if (current_observer_) {
             // 观察者模式：重新添加观察者
@@ -639,7 +639,7 @@ void RobotHardware::resume_status_monitoring() {
         } else if (batch_status_callback_) {
             // 批量状态回调模式：重新注册内部聚合回调
             motor_driver_impl->register_feedback_callback(
-                [this](const std::string& interface, uint32_t motor_id, 
+                [this](const std::string& interface, uint32_t motor_id,
                        const hardware_driver::motor_driver::Motor_Status& status) {
                     this->handle_motor_status_with_aggregation(interface, motor_id, status);
                 }
@@ -649,6 +649,34 @@ void RobotHardware::resume_status_monitoring() {
             // 事件总线模式：恢复事件处理
             monitoring_paused_ = false;
         }
+    }
+}
+
+void RobotHardware::force_high_freq_feedback() {
+    auto motor_driver_impl = std::dynamic_pointer_cast<hardware_driver::motor_driver::MotorDriverImpl>(motor_driver_);
+    if (motor_driver_impl) {
+        motor_driver_impl->force_high_freq_feedback();
+    }
+}
+
+void RobotHardware::force_low_freq_feedback() {
+    auto motor_driver_impl = std::dynamic_pointer_cast<hardware_driver::motor_driver::MotorDriverImpl>(motor_driver_);
+    if (motor_driver_impl) {
+        motor_driver_impl->force_low_freq_feedback();
+    }
+}
+
+void RobotHardware::cancel_force_high_freq() {
+    auto motor_driver_impl = std::dynamic_pointer_cast<hardware_driver::motor_driver::MotorDriverImpl>(motor_driver_);
+    if (motor_driver_impl) {
+        motor_driver_impl->cancel_force_high_freq();
+    }
+}
+
+void RobotHardware::cancel_force_low_freq() {
+    auto motor_driver_impl = std::dynamic_pointer_cast<hardware_driver::motor_driver::MotorDriverImpl>(motor_driver_);
+    if (motor_driver_impl) {
+        motor_driver_impl->cancel_force_low_freq();
     }
 }
 

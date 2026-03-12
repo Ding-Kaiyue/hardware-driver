@@ -164,6 +164,12 @@ public:
     // IAP (In-Application Programming) firmware update
     virtual void start_update(const std::string& interface, uint32_t motor_id, const std::string& firmware_file) = 0;
 
+    // 反馈频率模式控制（用于轨迹录制等需要高频反馈的场景）
+    virtual void force_high_freq_feedback() = 0;      // 强制高频反馈
+    virtual void force_low_freq_feedback() = 0;       // 强制低频反馈
+    virtual void cancel_force_high_freq() = 0;        // 取消强制高频，恢复自动切换
+    virtual void cancel_force_low_freq() = 0;         // 取消强制低频，恢复自动切换
+
 private:
     static constexpr std::array<float, 6> position_kps = {0.05f, 0.05f, 0.05f, 0.05f, 0.05f, 0.05f};
     static constexpr std::array<float, 6> position_kds = {0.005f, 0.005f, 0.005f, 0.005f, 0.005f, 0.005f};
