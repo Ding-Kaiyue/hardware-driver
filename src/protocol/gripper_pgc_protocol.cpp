@@ -16,64 +16,6 @@
 
 #include "gripper_pgc_protocol.hpp"
 
-// Helper functions for byte manipulation, can be moved to a separate utility file
-namespace {
-    // 将float转为高位在前的字节序并写入数组
-    static void float_to_big_endian_bytes(float value, uint8_t* out) {
-        union {
-            float f;
-            uint8_t b[4];
-        } u;
-        u.f = value;
-        out[0] = u.b[3];
-        out[1] = u.b[2];
-        out[2] = u.b[1];
-        out[3] = u.b[0];
-    }
-
-    // 从高位在前的字节流中读取float
-    static float big_endian_bytes_to_float(const uint8_t* in) {
-        union {
-            uint8_t b[4];
-            float f;
-        } u;
-        u.b[3] = in[0];
-        u.b[2] = in[1];
-        u.b[1] = in[2];
-        u.b[0] = in[3];
-        return u.f;
-    }
-
-    // 从高位在前的字节流中读取uint32
-    static uint32_t big_endian_bytes_to_uint32(const uint8_t* in) {
-        return (static_cast<uint32_t>(in[0]) << 24) |
-               (static_cast<uint32_t>(in[1]) << 16) |
-               (static_cast<uint32_t>(in[2]) << 8)  |
-               (static_cast<uint32_t>(in[3]));
-    }
-    
-    // 从高位在前的字节流中读取int32
-    static int32_t big_endian_bytes_to_int32(const uint8_t* in) {
-        return (static_cast<int32_t>(in[0]) << 24) |
-               (static_cast<int32_t>(in[1]) << 16) |
-               (static_cast<int32_t>(in[2]) << 8)  |
-               (static_cast<int32_t>(in[3]));
-    }
-
-    // 从高位在前的字节流中读取uint16
-    static uint16_t big_endian_bytes_to_uint16(const uint8_t* in) {
-        return (static_cast<uint16_t>(in[0]) << 8) | (static_cast<uint16_t>(in[1]));
-    }
-
-    // 将int32转为大端序字节
-    static void int32_to_big_endian_bytes(int32_t value, uint8_t* out) {
-        out[0] = static_cast<uint8_t>((value >> 24) & 0xFF);
-        out[1] = static_cast<uint8_t>((value >> 16) & 0xFF);
-        out[2] = static_cast<uint8_t>((value >> 8) & 0xFF);
-        out[3] = static_cast<uint8_t>(value & 0xFF);
-    }
-}
-
 namespace hardware_driver {
 namespace gripper_pgc_protocol {
 

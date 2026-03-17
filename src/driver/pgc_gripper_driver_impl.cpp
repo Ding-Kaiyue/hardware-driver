@@ -4,6 +4,7 @@
  *********************************************************************/
 
 #include "pgc_gripper_driver_impl.hpp"
+#include "bus/canfd_bus_impl.hpp"
 #include <iostream>
 #include <algorithm>
 #include <cstring>
@@ -15,6 +16,15 @@ PGCGripperDriverImpl::PGCGripperDriverImpl(std::shared_ptr<bus::BusInterface> bu
     : bus_(std::move(bus)) {
     if (!bus_) {
         throw std::runtime_error("[PGCGripperDriver] Bus interface is nullptr");
+    }
+
+    // PGC 使用扩展帧(EFF) + CAN FD
+    auto canfd_bus = std::dynamic_pointer_cast<bus::CanFdBus>(bus_);
+    if (canfd_bus) {
+        for (const auto& interface : canfd_bus->get_interface_names()) {
+            canfd_bus->set_extended_frame(interface, true);
+            canfd_bus->set_fd_mode(interface, true);
+        }
     }
 
     running_ = true;

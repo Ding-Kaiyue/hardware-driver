@@ -42,10 +42,12 @@ add_library(hardware_driver_canfd SHARED
   src/bus/canfd_bus_impl.cpp
   src/driver/motor_driver_impl.cpp
   src/driver/gripper_driver_impl.cpp
+  src/driver/omnipicker_gripper_driver_impl.cpp
   src/driver/pgc_gripper_driver_impl.cpp
   src/driver/button_driver_impl.cpp
   src/protocol/motor_protocol.cpp
   src/protocol/gripper_omnipicker_protocol.cpp
+  src/protocol/gripper_pgc_protocol.cpp
   src/protocol/iap_protocol.cpp
   src/interface/robot_hardware.cpp
 )

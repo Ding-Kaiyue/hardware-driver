@@ -2,6 +2,8 @@
 #include "hardware_driver/event/motor_events.hpp"
 #include "driver/motor_driver_impl.hpp"
 #include "driver/gripper_driver_impl.hpp"
+#include "driver/omnipicker_gripper_driver_impl.hpp"
+#include "driver/pgc_gripper_driver_impl.hpp"
 #include "driver/button_driver_impl.hpp"
 #include "bus/canfd_bus_impl.hpp"
 // #include "bus/usb2canfd_bus_impl.hpp"
@@ -12,6 +14,8 @@
 #include <iomanip>
 #include <cstdio>
 #include <atomic>
+#include <algorithm>
+#include <cctype>
 
 # define REQUEST_ALL
 // # define REQUEST_BY_MOTOR_ID     // 只适用于单条总线
@@ -1256,11 +1260,24 @@ namespace hardware_driver {
     }
 
     std::shared_ptr<gripper_driver::GripperDriverInterface> createCanFdGripperDriver(
-        const std::vector<std::string>& interfaces) {
+        const std::vector<std::string>& interfaces,
+        const std::string& gripper_model) {
         // 创建CANFD总线
         auto bus = std::make_shared<hardware_driver::bus::CanFdBus>(interfaces);
 
-        // 创建夹爪驱动实例
+        std::string model = gripper_model;
+        std::transform(model.begin(), model.end(), model.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+        if (model == "omnipicker" || model == "omni" || model == "zy" || model == "zhiyuan") {
+            return std::make_shared<hardware_driver::gripper_driver::OmniPickerGripperDriverImpl>(bus);
+        }
+
+        if (model == "pgc" || model == "dh" || model == "dahuan") {
+            return std::make_shared<hardware_driver::gripper_driver::PGCGripperDriverImpl>(bus);
+        }
+
+        // auto / unknown: 通用驱动，按 control_gripper 的 gripper_type 分发
         return std::make_shared<hardware_driver::gripper_driver::GripperDriverImpl>(bus);
     }
 

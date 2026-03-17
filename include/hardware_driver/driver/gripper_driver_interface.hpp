@@ -64,9 +64,15 @@ public:
      * @brief 控制夹爪
      * @param interface 总线接口名称 (如"can0")
      * @param gripper_type 夹爪类型
-     * @param position 位置 (0-100%)
-     * @param velocity 速度 (0-100%)
-     * @param effort 力 (0-100%)
+     * @param position 目标位置:
+     *        - PGC: 0~100
+     *        - OmniPicker: 0~255
+     * @param velocity 目标速度:
+     *        - PGC: 0~100
+     *        - OmniPicker: 0~255
+     * @param effort 目标力:
+     *        - PGC: 0~100
+     *        - OmniPicker: 0~255
      */
     virtual void control_gripper(const std::string& interface,
                                 GripperType gripper_type,

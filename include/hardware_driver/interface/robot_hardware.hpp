@@ -50,7 +50,8 @@ namespace hardware_driver {
 
     // 创建CANFD夹爪驱动实例
     std::shared_ptr<gripper_driver::GripperDriverInterface> createCanFdGripperDriver(
-        const std::vector<std::string>& interfaces);
+        const std::vector<std::string>& interfaces,
+        const std::string& gripper_model = "auto");
 
     // 创建CANFD按键驱动实例
     std::shared_ptr<button_driver::ButtonDriverInterface> createCanFdButtonDriver(
